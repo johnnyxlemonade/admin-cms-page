@@ -7,7 +7,5 @@ parameters:
     treatPhpDocTypesAsCertain: false
     reportUnmatchedIgnoredErrors: true
     checkUninitializedProperties: true
-    excludePaths:
-        - src/Resources/views
 includes:
     - vendor/phpstan/phpstan-strict-rules/rules.neon
