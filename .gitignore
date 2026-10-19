@@ -1,0 +1,7 @@
+/vendor/
+/build/
+/composer.lock
+/composer.local.json
+/composer.local.lock
+/.idea/
+/.phpunit.cache/

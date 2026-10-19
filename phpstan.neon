@@ -1,0 +1,13 @@
+parameters:
+    level: 8
+    paths:
+        - src
+        - tests
+    tmpDir: build/phpstan
+    treatPhpDocTypesAsCertain: false
+    reportUnmatchedIgnoredErrors: true
+    checkUninitializedProperties: true
+    excludePaths:
+        - src/Resources/views
+includes:
+    - vendor/phpstan/phpstan-strict-rules/rules.neon

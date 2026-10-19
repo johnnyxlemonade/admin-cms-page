@@ -1,0 +1,42 @@
+# Lemonade CMS Page
+
+`johnnyxlemonade/admin-cms-page` is the optional `cms.page` module for
+hierarchical, localized website pages. It contributes the Pages DataGrid and
+full-page editor after explicit installation and enablement through the shared
+Admin Platform module lifecycle.
+
+The page root owns stable identity, global hierarchy, sibling order, and a host
+template key. Translations own content, SEO fields, and draft/publish state.
+Canonical localized paths are reserved only through the shared `cms_route`
+contract; this package has no slug column or public route resolver of its own.
+
+## Host contract
+
+The host application binds `PageTemplateRendererInterface`, advertises at least
+one `PageTemplateDefinition` with a host-owned translation key, and renders the
+already resolved `PublicPage`, `PublicLocaleResolution`, and `CmsRoute`. The
+package deliberately contains no News queries, form implementation, page
+builder, or homepage ownership.
+
+## Installation
+
+The package requires PHP `>=8.3 <8.6`, `johnnyxlemonade/framework`,
+`johnnyxlemonade/admin-platform`, and `johnnyxlemonade/cms-core`.
+
+```bash
+composer require johnnyxlemonade/admin-cms-page:dev-main
+```
+
+Composer metadata discovers the module. Install and enable it through the host
+application's standard optional-module lifecycle.
+
+## Development and QA
+
+From the package root, run:
+
+```bash
+composer cs:check
+composer stan
+composer test
+composer qa
+```

@@ -1,0 +1,45 @@
+{
+  "name": "johnnyxlemonade/admin-cms-page",
+  "description": "Hierarchical localized CMS pages for Lemonade Admin.",
+  "type": "library",
+  "license": "Apache-2.0",
+  "require": {
+    "php": ">=8.3 <8.6",
+    "johnnyxlemonade/admin-platform": "dev-main",
+    "johnnyxlemonade/cms-core": "dev-main",
+    "johnnyxlemonade/framework": "dev-master",
+    "psr/http-message": "^2.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "Lemonade\\Cms\\Page\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Lemonade\\Cms\\Page\\Tests\\": "tests/"
+    }
+  },
+  "extra": {
+    "lemonade": {
+      "modules": [
+        "Lemonade\\Cms\\Page\\ModuleManifest"
+      ]
+    }
+  },
+  "scripts": {
+    "cs:check": "@php vendor/bin/php-cs-fixer fix --dry-run --diff --allow-risky=yes --config=.php-cs-fixer.php",
+    "cs:fix": "@php vendor/bin/php-cs-fixer fix --allow-risky=yes --config=.php-cs-fixer.php",
+    "stan": "@php vendor/bin/phpstan analyse --memory-limit=4G --configuration=phpstan.neon",
+    "test": "@php vendor/bin/phpunit --configuration=phpunit.xml.dist",
+    "qa": ["@cs:check", "@stan", "@test"]
+  },
+  "require-dev": {
+    "friendsofphp/php-cs-fixer": "^3.94",
+    "phpstan/phpstan": "2.3.0",
+    "phpstan/phpstan-strict-rules": "2.1.0",
+    "phpunit/phpunit": "^10.5"
+  },
+  "minimum-stability": "dev",
+  "prefer-stable": true
+}

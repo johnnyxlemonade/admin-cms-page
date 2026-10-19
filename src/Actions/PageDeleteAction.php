@@ -1,0 +1,63 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Lemonade\Cms\Page\Actions;
+
+use Lemonade\Admin\Action\Contract\ModuleActionHandlerInterface;
+use Lemonade\Admin\Action\Exception\ModuleActionException;
+use Lemonade\Admin\Action\ModuleActionResult;
+use Lemonade\Admin\Audit\AuditActor;
+use Lemonade\Admin\Http\AdminErrorCode;
+use Lemonade\Admin\Identity\LocalActorGuard;
+use Lemonade\Admin\Identity\LocalActorRequiredException;
+use Lemonade\Cms\Page\Services\PageService;
+use Lemonade\Framework\Http\HttpStatus;
+
+/**
+ * Prevadi soft delete stranky na canonical Admin action response
+ */
+final readonly class PageDeleteAction implements ModuleActionHandlerInterface
+{
+    /**
+     * Nastavuje lifecycle service a canonical actor guard
+     */
+    public function __construct(
+        private PageService $pages,
+        private LocalActorGuard $actors,
+    ) {}
+
+    /**
+     * Soft-deleteuje existujici stranku
+     *
+     * @param array<string,mixed> $payload
+     */
+    public function execute(?int $id, array $payload): ModuleActionResult
+    {
+        if ($id === null) {
+            throw new ModuleActionException(
+                HttpStatus::NOT_FOUND,
+                AdminErrorCode::NOT_FOUND,
+                'Page not found.',
+            );
+        }
+
+        try {
+            $actor = AuditActor::user($this->actors->requireLocalUser()->id());
+            $this->pages->delete(
+                actor: $actor,
+                pageId: $id,
+            );
+        } catch (LocalActorRequiredException $exception) {
+            throw new ModuleActionException(
+                HttpStatus::FORBIDDEN,
+                AdminErrorCode::LOCAL_ACTOR_REQUIRED,
+                $exception->getMessage(),
+            );
+        } catch (\RuntimeException $exception) {
+            return ModuleActionResult::invalid(['_form' => $exception->getMessage()]);
+        }
+
+        return ModuleActionResult::success('page.actions.deleted');
+    }
+}
