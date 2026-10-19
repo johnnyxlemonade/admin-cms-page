@@ -12,12 +12,12 @@ use Lemonade\Cms\CmsPublicationState;
 final readonly class PagePublicationPlan
 {
     /**
-     * Nastavuje vysledny stav, datum a pozadavek na publish opravneni
+     * Nastavuje vysledny stav, datum a potrebu samostatne publication udalosti
      */
     public function __construct(
         public CmsPublicationState $state,
         public ?string $publishedAt,
         public bool $changed,
-        public bool $requiresPermission,
+        public bool $requiresPublicationEvent,
     ) {}
 }

@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Lemonade\Cms\Page\Tests\Unit\Hierarchy;
 
+use DomainException;
 use Lemonade\Cms\Page\Hierarchy\PageHierarchy;
 use PHPUnit\Framework\TestCase;
-use RuntimeException;
 
 /**
  * Overuje libovolne zanoreni a ochranu pred cykly
@@ -42,7 +42,7 @@ final class PageHierarchyTest extends TestCase
      */
     public function testRejectsMoveBelowDescendant(): void
     {
-        $this->expectException(RuntimeException::class);
+        $this->expectException(DomainException::class);
         $this->expectExceptionMessage('page.validation.parent_cycle');
 
         $this->hierarchy()->assertMove(1, 3);
@@ -59,7 +59,7 @@ final class PageHierarchyTest extends TestCase
             ['id' => 5, 'parent_id' => 4, 'sort_order' => 0],
         ]);
 
-        $this->expectException(RuntimeException::class);
+        $this->expectException(DomainException::class);
         $this->expectExceptionMessage('page.validation.parent_cycle');
 
         $hierarchy->assertMove(1, 4);

@@ -10,7 +10,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Overuje lokalizovany draft/publish lifecycle a permission hranici
+ * Overuje lokalizovany draft/publish lifecycle a publication udalosti
  */
 final class PagePublicationPlanResolverTest extends TestCase
 {
@@ -27,7 +27,7 @@ final class PagePublicationPlanResolverTest extends TestCase
         CmsPublicationState $expectedState,
         ?string $expectedPublishedAt,
         bool $changed,
-        bool $requiresPermission,
+        bool $requiresPublicationEvent,
     ): void {
         $plan = (new PagePublicationPlanResolver())->resolve(
             $requested,
@@ -39,7 +39,7 @@ final class PagePublicationPlanResolverTest extends TestCase
         self::assertSame($expectedState, $plan->state);
         self::assertSame($expectedPublishedAt, $plan->publishedAt);
         self::assertSame($changed, $plan->changed);
-        self::assertSame($requiresPermission, $plan->requiresPermission);
+        self::assertSame($requiresPublicationEvent, $plan->requiresPublicationEvent);
     }
 
     /**

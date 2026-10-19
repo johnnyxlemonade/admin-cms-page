@@ -4,14 +4,15 @@ declare(strict_types=1);
 
 namespace Lemonade\Cms\Page\Tests\Unit\Editor;
 
-use Lemonade\Admin\Editor\AdminEditor\FieldGroupBlock;
-use Lemonade\Admin\Editor\AdminEditor\SectionBlock;
+use Lemonade\Admin\Editor\AdminEditor\Field\TextareaField;
+use Lemonade\Admin\Editor\AdminEditor\Field\UrlSegmentField;
+use Lemonade\Admin\Editor\AdminEditor\Layout\FieldGroupBlock;
+use Lemonade\Admin\Editor\AdminEditor\Layout\SectionBlock;
 use Lemonade\Admin\Module\AdminModuleRegistry;
 use Lemonade\Admin\Module\AdminModuleRouteResolver;
-use Lemonade\Admin\Modules\Registry\ModuleRegistry;
 use Lemonade\Admin\Navigation\AdminNavigationGroupRegistry;
 use Lemonade\Cms\Page\Editor\PageAdminEditorDefinitionFactory;
-use Lemonade\Cms\Page\PageModuleDefinition;
+use Lemonade\Cms\Page\ModuleManifest;
 use Lemonade\Framework\Routing\ControllerAction;
 use Lemonade\Framework\Routing\Router;
 use Lemonade\Framework\Routing\UrlGenerator;
@@ -47,7 +48,7 @@ final class PageAdminEditorDefinitionFactoryTest extends TestCase
                     'content' => '<p>Content</p>',
                     'page_title' => 'Contact us',
                     'meta_description' => null,
-                    'url_segment' => 'contact',
+                    'canonical_path' => 'office/contact',
                 ]],
             ],
             contentLocale: 'en',
@@ -63,32 +64,53 @@ final class PageAdminEditorDefinitionFactoryTest extends TestCase
         self::assertInstanceOf(SectionBlock::class, $contentSection);
         $fields = $contentSection->blocks()[0];
         self::assertInstanceOf(FieldGroupBlock::class, $fields);
-        self::assertTrue($fields->columns()[2]->field()->isRichText());
-        self::assertTrue($fields->columns()[2]->field()->hasRichTextImageUpload());
-        self::assertTrue($fields->columns()[2]->field()->hasRichTextFileUpload());
+        $contentField = $fields->columns()[2]->field();
+        self::assertInstanceOf(TextareaField::class, $contentField);
+        self::assertTrue($contentField->isRichText());
+        self::assertTrue($contentField->hasImageUpload());
+        self::assertTrue($contentField->hasFileUpload());
 
         $seoSection = $editor->tabs()[1]->blocks()[0];
         self::assertInstanceOf(SectionBlock::class, $seoSection);
         self::assertSame('page.editor.sections.seo_help', $seoSection->descriptionKey());
         $seoFields = $seoSection->blocks()[0];
         self::assertInstanceOf(FieldGroupBlock::class, $seoFields);
-        self::assertSame('page.fields.page_title_help', $seoFields->columns()[0]->field()->helpKey());
-        self::assertSame('page.fields.meta_description_help', $seoFields->columns()[1]->field()->helpKey());
+        self::assertSame('page.fields.page_title_help', $seoFields->columns()[0]->field()->helpTranslationKey());
+        self::assertSame('page.fields.meta_description_help', $seoFields->columns()[1]->field()->helpTranslationKey());
 
         $settingsSection = $editor->tabs()[2]->blocks()[0];
         self::assertInstanceOf(SectionBlock::class, $settingsSection);
         $settingsFields = $settingsSection->blocks()[0];
         self::assertInstanceOf(FieldGroupBlock::class, $settingsFields);
         self::assertSame(
-            ['parent_id', 'template_key', 'url_segment'],
+            ['parent_id', 'template_key'],
             array_map(static fn($column): string => $column->field()->name(), $settingsFields->columns()),
         );
-        $urlField = $settingsFields->columns()[2]->field();
-        self::assertSame('readonly_editable', $urlField->type());
-        $marker = $urlField->markerDefinition();
-        self::assertNotNull($marker);
-        self::assertSame('url_segment_edited', $marker->name());
-        self::assertSame('0', $marker->configuredDefaultValue());
+        $urlField = $seoFields->columns()[2]->field();
+        self::assertInstanceOf(UrlSegmentField::class, $urlField);
+        self::assertSame('/office/', $urlField->pathPrefix());
+        self::assertSame('change-url', $urlField->actionKey());
+        self::assertFalse($urlField->autoGenerates());
+
+        $draftEditor = $factory->create(
+            page: [
+                'id' => 17,
+                'parent_id' => null,
+                'template_key' => 'content',
+                'translations' => [['locale' => 'en', 'title' => 'New page', 'canonical_path' => null]],
+            ],
+            contentLocale: 'en',
+            canPublish: false,
+            parentOptions: ['' => 'Root'],
+            templateOptions: ['content' => 'Content'],
+        );
+        $draftSeo = $draftEditor->tabs()[1]->blocks()[0];
+        self::assertInstanceOf(SectionBlock::class, $draftSeo);
+        $draftFields = $draftSeo->blocks()[0];
+        self::assertInstanceOf(FieldGroupBlock::class, $draftFields);
+        $draftUrlField = $draftFields->columns()[2]->field();
+        self::assertInstanceOf(UrlSegmentField::class, $draftUrlField);
+        self::assertTrue($draftUrlField->autoGenerates());
     }
 
     /**
@@ -96,12 +118,10 @@ final class PageAdminEditorDefinitionFactoryTest extends TestCase
      */
     private function routes(): AdminModuleRouteResolver
     {
-        $definition = new PageModuleDefinition();
+        $definition = new ModuleManifest();
         $adminModules = new AdminModuleRegistry(new AdminNavigationGroupRegistry());
         $adminModules->register($definition);
-        $modules = new ModuleRegistry();
-        $modules->register($definition);
 
-        return new AdminModuleRouteResolver($adminModules, $modules);
+        return new AdminModuleRouteResolver($adminModules);
     }
 }

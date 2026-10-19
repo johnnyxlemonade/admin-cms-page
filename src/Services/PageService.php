@@ -4,9 +4,8 @@ declare(strict_types=1);
 
 namespace Lemonade\Cms\Page\Services;
 
+use DomainException;
 use Lemonade\Admin\Audit\AuditActor;
-use Lemonade\Admin\Audit\AuditOperation;
-use Lemonade\Admin\Authorization\AuthorizationService;
 use Lemonade\Admin\Event\DomainEvent;
 use Lemonade\Admin\Event\TransactionalEventCollector;
 use Lemonade\Admin\Event\TransactionalEventProcessor;
@@ -37,7 +36,6 @@ final readonly class PageService
         private LanguageRegistry $languages,
         private CmsRouteReservationService $routes,
         private Slugger $slugger,
-        private AuthorizationService $authorization,
         private TransactionalEventProcessor $events,
         private PageTemplateRendererInterface $templates,
         private PageSubtreeRouteMapper $subtreeRoutes,
@@ -49,15 +47,14 @@ final readonly class PageService
      */
     public function createDraft(AuditActor $actor, string $locale): int
     {
-        $this->authorization->requirePermission('cms.page.create');
         if (!$this->enabledLocale($locale)) {
-            throw new RuntimeException('page.validation.locale_invalid');
+            throw new DomainException('page.validation.locale_invalid');
         }
         $templates = $this->templates->templates();
-        $template = $templates[0] ?? throw new RuntimeException('page.validation.template_invalid');
+        $template = $templates[0] ?? throw new DomainException('page.validation.template_invalid');
 
         return $this->events->execute(
-            new AuditOperation('cms.page', 'page.create', $actor),
+            $actor,
             function (TransactionalEventCollector $events) use ($locale, $template): int {
                 $pageId = $this->pages->createDraft(
                     locale: $locale,
@@ -81,10 +78,9 @@ final readonly class PageService
      */
     public function save(AuditActor $actor, int $pageId, array $data): void
     {
-        $this->authorization->requirePermission('cms.page.edit');
         $currentPage = $this->pages->page($pageId);
         if ($currentPage === null) {
-            throw new RuntimeException('page.validation.not_found');
+            throw new DomainException('page.validation.not_found');
         }
         $locale = strtolower(trim((string) ($data['locale'] ?? '')));
         $title = trim((string) ($data['title'] ?? ''));
@@ -93,26 +89,29 @@ final readonly class PageService
         $metaDescription = $this->nullableText($data['meta_description'] ?? null);
         $parentId = $this->nullablePositiveInt($data['parent_id'] ?? null);
         $templateKey = trim((string) ($data['template_key'] ?? ''));
-        $urlEdited = (string) ($data['url_segment_edited'] ?? '') === '1';
-        $urlSegment = $urlEdited ? trim((string) ($data['url_segment'] ?? '')) : '';
-        $publishedAtInput = (string) ($data['published_at'] ?? '');
         if ($title === '') {
-            throw new RuntimeException('page.validation.title_required');
+            throw new DomainException('page.validation.title_required');
         }
         if (mb_strlen($title) > 180) {
-            throw new RuntimeException('page.validation.title_max_length');
+            throw new DomainException('page.validation.title_max_length');
         }
 
         $existingTranslation = $this->pages->translation($pageId, $locale);
         if ($existingTranslation === null && !$this->enabledLocale($locale)) {
-            throw new RuntimeException('page.validation.locale_invalid');
+            throw new DomainException('page.validation.locale_invalid');
         }
-        $requestedState = CmsPublicationState::tryFrom(
-            (int) ($data['publication_state'] ?? CmsPublicationState::Draft->value),
-        );
+        $currentState = CmsPublicationState::tryFrom(
+            (int) ($existingTranslation['publication_state'] ?? CmsPublicationState::Draft->value),
+        ) ?? CmsPublicationState::Draft;
+        $requestedState = array_key_exists('publication_state', $data)
+            ? CmsPublicationState::tryFrom((int) $data['publication_state'])
+            : $currentState;
         if ($requestedState === null) {
-            throw new RuntimeException('page.validation.publication_invalid');
+            throw new DomainException('page.validation.publication_invalid');
         }
+        $publishedAtInput = array_key_exists('published_at', $data)
+            ? (string) $data['published_at']
+            : (string) ($existingTranslation['published_at'] ?? '');
         $publication = $this->publicationPlans->resolve(
             $requestedState,
             $publishedAtInput,
@@ -124,9 +123,6 @@ final readonly class PageService
             currentTemplateKey: (string) $currentPage['template_key'],
             publicationState: $publication->state,
         );
-        if ($publication->requiresPermission) {
-            $this->authorization->requirePermission('cms.page.publish');
-        }
         if ($this->isSaveNoOp(
             pageId: $pageId,
             currentPage: $currentPage,
@@ -138,8 +134,6 @@ final readonly class PageService
             content: $content,
             pageTitle: $pageTitle,
             metaDescription: $metaDescription,
-            urlSegment: $urlSegment,
-            urlEdited: $urlEdited,
             publicationState: $publication->state,
             publishedAt: $publication->publishedAt,
         )) {
@@ -147,15 +141,13 @@ final readonly class PageService
         }
 
         $this->events->execute(
-            new AuditOperation('cms.page', 'page.save', $actor),
+            $actor,
             function (TransactionalEventCollector $events) use (
                 $pageId,
                 $parentId,
                 $templateKey,
                 $locale,
                 $title,
-                $urlSegment,
-                $urlEdited,
                 $content,
                 $pageTitle,
                 $metaDescription,
@@ -169,7 +161,7 @@ final readonly class PageService
                 $currentPage = $this->treeRow($treeRows, $pageId);
                 $existingTranslation = $this->pages->translationForUpdate($pageId, $locale);
                 if ($existingTranslation === null && !$this->enabledLocale($locale)) {
-                    throw new RuntimeException('page.validation.locale_invalid');
+                    throw new DomainException('page.validation.locale_invalid');
                 }
                 $publication = $this->publicationPlans->resolve(
                     $requestedState,
@@ -182,9 +174,6 @@ final readonly class PageService
                     currentTemplateKey: (string) $currentPage['template_key'],
                     publicationState: $publication->state,
                 );
-                if ($publication->requiresPermission) {
-                    $this->authorization->requirePermission('cms.page.publish');
-                }
                 $currentParentId = $currentPage['parent_id'] === null ? null : (int) $currentPage['parent_id'];
                 $subtreeIds = $tree->descendantIds($pageId);
                 $this->updateSubtreeRoutes(
@@ -192,8 +181,7 @@ final readonly class PageService
                     oldParentId: $currentParentId,
                     newParentId: $parentId,
                     locale: $locale,
-                    requestedSegment: $urlSegment,
-                    urlEdited: $urlEdited,
+                    explicitSegment: null,
                     title: $title,
                     subtreeIds: $subtreeIds,
                 );
@@ -235,7 +223,7 @@ final readonly class PageService
                     (string) $pageId,
                     ['locale' => $locale],
                 ));
-                if ($publication->requiresPermission) {
+                if ($publication->requiresPublicationEvent) {
                     $events->record(new DomainEvent(
                         $publication->state === CmsPublicationState::Published
                             ? 'cms.page.published'
@@ -251,25 +239,74 @@ final readonly class PageService
     }
 
     /**
+     * Normalizuje a explicitne zmeni vlastni segment vcetne celeho podstromu
+     */
+    public function changeUrlSegment(
+        AuditActor $actor,
+        int $pageId,
+        string $locale,
+        string $segment,
+    ): string {
+        $locale = strtolower(trim($locale));
+        $segment = $this->explicitSegment($segment, $locale);
+
+        return $this->events->execute(
+            $actor,
+            function (TransactionalEventCollector $events) use ($pageId, $locale, $segment): string {
+                $treeRows = $this->pages->activeTreeForUpdate();
+                $tree = new PageHierarchy($treeRows);
+                $page = $this->treeRow($treeRows, $pageId);
+                $translation = $this->pages->translationForUpdate($pageId, $locale);
+                if ($translation === null && !$this->enabledLocale($locale)) {
+                    throw new DomainException('page.validation.locale_invalid');
+                }
+                $parentId = $page['parent_id'] === null ? null : (int) $page['parent_id'];
+                $changed = $this->updateSubtreeRoutes(
+                    pageId: $pageId,
+                    oldParentId: $parentId,
+                    newParentId: $parentId,
+                    locale: $locale,
+                    explicitSegment: $segment,
+                    title: '',
+                    subtreeIds: $tree->descendantIds($pageId),
+                );
+                if (!$changed) {
+                    $events->noOp();
+
+                    return $segment;
+                }
+                $events->record(new DomainEvent(
+                    'cms.page.updated',
+                    'cms.page',
+                    'cms_page',
+                    (string) $pageId,
+                    ['locale' => $locale],
+                ));
+
+                return $segment;
+            },
+        );
+    }
+
+    /**
      * Soft-deleteuje pouze list bez aktivnich potomku
      */
     public function delete(AuditActor $actor, int $pageId): void
     {
-        $this->authorization->requirePermission('cms.page.delete');
         $page = $this->pages->lifecycle($pageId);
         if ($page === null) {
-            throw new RuntimeException('page.validation.not_found');
+            throw new DomainException('page.validation.not_found');
         }
         if ($page['deleted_at'] !== null) {
             return;
         }
         $this->events->execute(
-            new AuditOperation('cms.page', 'page.delete', $actor),
+            $actor,
             function (TransactionalEventCollector $events) use ($pageId): void {
                 $rows = $this->pages->activeTreeForUpdate();
                 $tree = new PageHierarchy($rows);
                 if (count($tree->descendantIds($pageId)) > 1) {
-                    throw new RuntimeException('page.validation.delete_has_children');
+                    throw new DomainException('page.validation.delete_has_children');
                 }
                 $now = date('Y-m-d H:i:s');
                 $page = $this->treeRow($rows, $pageId);
@@ -291,15 +328,23 @@ final readonly class PageService
      */
     public function restore(AuditActor $actor, int $pageId): void
     {
-        $this->authorization->requirePermission('cms.page.restore');
+        $page = $this->pages->lifecycle($pageId);
+        if ($page === null) {
+            throw new DomainException('page.validation.not_found');
+        }
+        if ($page['deleted_at'] === null) {
+            return;
+        }
         $this->events->execute(
-            new AuditOperation('cms.page', 'page.restore', $actor),
+            $actor,
             function (TransactionalEventCollector $events) use ($pageId): void {
                 $page = $this->pages->lifecycleForUpdate($pageId);
                 if ($page === null) {
-                    throw new RuntimeException('page.validation.not_found');
+                    throw new DomainException('page.validation.not_found');
                 }
                 if ($page['deleted_at'] === null) {
+                    $events->noOp();
+
                     return;
                 }
                 $rows = $this->pages->activeTreeForUpdate();
@@ -312,7 +357,7 @@ final readonly class PageService
                     }
                 }
                 if (!$parentExists) {
-                    throw new RuntimeException('page.validation.parent_invalid');
+                    throw new DomainException('page.validation.parent_invalid');
                 }
                 $now = date('Y-m-d H:i:s');
                 $this->pages->restoreDraft($pageId, $now);
@@ -330,12 +375,11 @@ final readonly class PageService
      */
     public function reorder(AuditActor $actor, int $pageId, int $direction): void
     {
-        $this->authorization->requirePermission('cms.page.edit');
         if (!in_array($direction, [-1, 1], true)) {
-            throw new RuntimeException('page.validation.reorder_invalid');
+            throw new DomainException('page.validation.reorder_invalid');
         }
         $this->events->execute(
-            new AuditOperation('cms.page', 'page.reorder', $actor),
+            $actor,
             function (TransactionalEventCollector $events) use ($pageId, $direction): void {
                 $rows = $this->pages->activeTreeForUpdate();
                 $page = $this->treeRow($rows, $pageId);
@@ -343,10 +387,12 @@ final readonly class PageService
                 $siblings = $this->siblingIds($rows, $parentId);
                 $position = array_search($pageId, $siblings, true);
                 if ($position === false) {
-                    throw new RuntimeException('page.validation.not_found');
+                    throw new DomainException('page.validation.not_found');
                 }
                 $target = $position + $direction;
                 if (!isset($siblings[$target])) {
+                    $events->noOp();
+
                     return;
                 }
                 [$siblings[$position], $siblings[$target]] = [$siblings[$target], $siblings[$position]];
@@ -366,11 +412,10 @@ final readonly class PageService
         ?int $oldParentId,
         ?int $newParentId,
         string $locale,
-        string $requestedSegment,
-        bool $urlEdited,
+        ?string $explicitSegment,
         string $title,
         array $subtreeIds,
-    ): void {
+    ): bool {
         $routeRows = $this->pages->routesForPages($subtreeIds);
         $rootRoutes = [];
         foreach ($routeRows as $route) {
@@ -380,11 +425,10 @@ final readonly class PageService
         }
 
         $currentPath = $rootRoutes[$locale] ?? null;
-        $segment = $urlEdited
-            ? $this->explicitSegment($requestedSegment, $locale)
-            : ($currentPath === null ? $this->slugger->slug($title, 180, $locale) : basename($currentPath));
+        $segment = $explicitSegment
+            ?? ($currentPath === null ? $this->slugger->slug($title, 180, $locale) : basename($currentPath));
         if ($segment === '') {
-            throw new RuntimeException('page.validation.url_invalid');
+            throw new DomainException('admin.url_segment.invalid');
         }
 
         $parentChanged = $oldParentId !== $newParentId;
@@ -398,10 +442,19 @@ final readonly class PageService
             ];
         }
         if (($parentChanged || $segmentChanged) && $routeRows !== []) {
+            $routesToReplace = $parentChanged
+                ? $routeRows
+                : array_values(array_filter(
+                    $routeRows,
+                    static fn(array $route): bool => $route['locale'] === $locale,
+                ));
+            if ($routesToReplace === []) {
+                throw new DomainException('page.validation.route_inconsistent');
+            }
             try {
                 $this->routes->replaceExplicitBatch(
                     'cms.page',
-                    $this->subtreeRoutes->replacements($routeRows, $prefixes),
+                    $this->subtreeRoutes->replacements($routesToReplace, $prefixes),
                 );
             } catch (CmsRouteValidationException $exception) {
                 throw $this->pageRouteValidation($exception);
@@ -409,19 +462,21 @@ final readonly class PageService
         }
 
         if ($currentPath !== null) {
-            return;
+            return $parentChanged || $segmentChanged;
         }
         $path = $this->pathUnderParent($newParentId, $locale, $segment);
         try {
-            if (!$urlEdited) {
+            if ($explicitSegment === null) {
                 $this->routes->reserveAutomatic('cms.page', $pageId, $locale, $path, self::MAXIMUM_PATH_LENGTH);
 
-                return;
+                return true;
             }
             $this->routes->reserveExplicit('cms.page', $pageId, $locale, $path);
         } catch (CmsRouteValidationException $exception) {
             throw $this->pageRouteValidation($exception);
         }
+
+        return true;
     }
 
     /**
@@ -481,7 +536,7 @@ final readonly class PageService
             }
         }
 
-        throw new RuntimeException('page.validation.not_found');
+        throw new DomainException('page.validation.not_found');
     }
 
     /**
@@ -494,7 +549,7 @@ final readonly class PageService
         }
         $parentPath = $this->pages->routePath($parentId, $locale);
         if ($parentPath === null) {
-            throw new RuntimeException('page.validation.parent_locale_route_missing');
+            throw new DomainException('page.validation.parent_locale_route_missing');
         }
 
         return $parentPath . '/' . $segment;
@@ -506,8 +561,13 @@ final readonly class PageService
     private function explicitSegment(string $value, string $locale): string
     {
         $value = trim($value, '/');
-        if ($value === '' || str_contains($value, '/') || $this->slugger->slug($value, 180, $locale) !== $value) {
-            throw new RuntimeException('page.validation.url_invalid');
+        if ($value === '' || str_contains($value, '/')) {
+            throw new DomainException('admin.url_segment.invalid');
+        }
+
+        $value = $this->slugger->slug($value, 180, $locale);
+        if ($value === '') {
+            throw new DomainException('admin.url_segment.invalid');
         }
 
         return $value;
@@ -534,11 +594,11 @@ final readonly class PageService
         if ($state !== CmsPublicationState::Published
             && $this->pages->hasPublishedDescendants($descendantIds, $locale)
         ) {
-            throw new RuntimeException('page.validation.unpublish_has_published_children');
+            throw new DomainException('page.validation.unpublish_has_published_children');
         }
         if ($state === CmsPublicationState::Published) {
             if (!$this->routes->hasReservation('cms.page', $pageId, $locale)) {
-                throw new RuntimeException('page.validation.url_required');
+                throw new DomainException('page.validation.url_required');
             }
             if ($parentId !== null) {
                 $parent = $this->pages->translation($parentId, $locale);
@@ -548,7 +608,7 @@ final readonly class PageService
                     || $publishedAt === null
                     || (string) $parent['published_at'] > $publishedAt
                 ) {
-                    throw new RuntimeException('page.validation.parent_not_published');
+                    throw new DomainException('page.validation.parent_not_published');
                 }
             }
         }
@@ -558,12 +618,12 @@ final readonly class PageService
     /**
      * Prelozi shared route chybu na validacni klic Pages editoru
      */
-    private function pageRouteValidation(CmsRouteValidationException $exception): RuntimeException
+    private function pageRouteValidation(CmsRouteValidationException $exception): DomainException
     {
-        return new RuntimeException(match ($exception->getMessage()) {
-            'cms.route.path_reserved' => 'page.validation.url_reserved',
-            'cms.route.path_occupied' => 'page.validation.url_occupied',
-            'cms.route.path_invalid' => 'page.validation.url_invalid',
+        return new DomainException(match ($exception->getMessage()) {
+            'cms.route.path_reserved' => 'admin.url_segment.reserved',
+            'cms.route.path_occupied' => 'admin.url_segment.occupied',
+            'cms.route.path_invalid' => 'admin.url_segment.invalid',
             default => 'page.validation.route_inconsistent',
         }, previous: $exception);
     }
@@ -577,7 +637,7 @@ final readonly class PageService
             return null;
         }
         if (!is_string($value) || preg_match('/^page-([1-9][0-9]*)$/D', $value, $matches) !== 1) {
-            throw new RuntimeException('page.validation.parent_invalid');
+            throw new DomainException('page.validation.parent_invalid');
         }
 
         return (int) $matches[1];
@@ -627,7 +687,7 @@ final readonly class PageService
             return;
         }
 
-        throw new RuntimeException('page.validation.template_invalid');
+        throw new DomainException('page.validation.template_invalid');
     }
 
     /**
@@ -647,8 +707,6 @@ final readonly class PageService
         ?string $content,
         ?string $pageTitle,
         ?string $metaDescription,
-        string $urlSegment,
-        bool $urlEdited,
         CmsPublicationState $publicationState,
         ?string $publishedAt,
     ): bool {
@@ -675,6 +733,6 @@ final readonly class PageService
             return false;
         }
 
-        return !$urlEdited || basename($currentPath) === $this->explicitSegment($urlSegment, $locale);
+        return true;
     }
 }

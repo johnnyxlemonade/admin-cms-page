@@ -36,8 +36,6 @@ final readonly class PageEditorValidationSchema
             ->field('title', $this->translator->get('page.fields.title'))
                 ->required($this->translator->get('page.validation.title_required'))
                 ->maxLength(180, $this->translator->get('page.validation.title_max_length'))
-            ->field('url_segment', $this->translator->get('page.fields.url_segment'))
-                ->maxLength(180, $this->translator->get('page.validation.url_invalid'))
             ->field('page_title', $this->translator->get('page.fields.page_title'))
                 ->maxLength(180, $this->translator->get('page.validation.page_title_max_length'))
             ->field('meta_description', $this->translator->get('page.fields.meta_description'))

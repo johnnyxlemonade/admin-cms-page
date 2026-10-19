@@ -4,16 +4,13 @@ declare(strict_types=1);
 
 namespace Lemonade\Cms\Page;
 
+use Lemonade\Admin\Action\ModuleActionRegistry;
 use Lemonade\Admin\Action\StandardEditorAction;
-use Lemonade\Admin\Audit\AuditEventPresentationRegistry;
-use Lemonade\Admin\Authorization\PermissionCatalogRegistry;
 use Lemonade\Admin\DataGrid\DataGridRegistry;
 use Lemonade\Admin\Editor\EditorDispatcher;
 use Lemonade\Admin\Editor\EditorRegistry;
 use Lemonade\Admin\Identity\LocalActorGuard;
 use Lemonade\Admin\Localization\ClientTranslationGroupRegistry;
-use Lemonade\Admin\Module\AdminModuleRegistry;
-use Lemonade\Admin\Modules\Registry\ModuleRegistry;
 use Lemonade\Admin\Page\ModulePageRegistry;
 use Lemonade\Cms\Page\Actions\PageActionRegistrar;
 use Lemonade\Cms\Page\Actions\PageReorderAction;
@@ -26,7 +23,6 @@ use Lemonade\Framework\Container\ContainerInterface;
 use Lemonade\Framework\Core\BootableServiceProviderInterface;
 use Lemonade\Framework\Core\ServiceProviderInterface;
 use Lemonade\Framework\Localization\TranslationResourceRegistry;
-use Lemonade\Framework\View\ViewResourceRegistry;
 
 /**
  * Registruje CMS Page contribution do sdileneho Admin a CMS runtime
@@ -42,14 +38,14 @@ final readonly class CmsPageServiceProvider implements ServiceProviderInterface,
             PageActionRegistrar::CREATE_HANDLER,
             static fn(ContainerInterface $container): StandardEditorAction => StandardEditorAction::create(
                 $container->get(EditorDispatcher::class),
-                'cms.page',
+                ModuleManifest::CODE,
             ),
         );
         $container->scoped(
             PageActionRegistrar::SAVE_HANDLER,
             static fn(ContainerInterface $container): StandardEditorAction => StandardEditorAction::save(
                 $container->get(EditorDispatcher::class),
-                'cms.page',
+                ModuleManifest::CODE,
             ),
         );
         $container->scoped(
@@ -68,7 +64,6 @@ final readonly class CmsPageServiceProvider implements ServiceProviderInterface,
                 1,
             ),
         );
-        $container->singleton(PageActionRegistrar::class, PageActionRegistrar::class);
         $container->scoped(PublicPageRouteHandler::class, PublicPageRouteHandler::class);
     }
 
@@ -77,27 +72,18 @@ final readonly class CmsPageServiceProvider implements ServiceProviderInterface,
      */
     public function boot(ContainerInterface $container): void
     {
-        $definition = new PageModuleDefinition();
         $container->get(TranslationResourceRegistry::class)->register(
             __DIR__ . '/Resources/lang',
-            'cms.page',
-        );
-        $container->get(ViewResourceRegistry::class)->register(
-            'cms-page',
-            __DIR__ . '/Resources/views',
+            ModuleManifest::CODE,
         );
         $container->get(ClientTranslationGroupRegistry::class)->register('page');
-        $container->get(ModuleRegistry::class)->register($definition);
-        $container->get(AdminModuleRegistry::class)->register($definition);
-        $container->get(DataGridRegistry::class)->register($definition->code(), PageDataGrid::class);
-        $container->get(ModulePageRegistry::class)->registerIndex($definition->code(), PageModulePageProvider::class);
-        $container->get(ModulePageRegistry::class)->registerEditor($definition->code(), PageModulePageProvider::class);
-        $container->get(EditorRegistry::class)->register($definition->code(), PageEditor::class);
-        $container->get(PermissionCatalogRegistry::class)->register(...$definition->permissionDefinitions());
-        $container->get(PageActionRegistrar::class)->register();
-        $container->get(AuditEventPresentationRegistry::class)->registerModuleDefinition($definition);
+        $container->get(DataGridRegistry::class)->register(ModuleManifest::CODE, PageDataGrid::class);
+        $container->get(ModulePageRegistry::class)->registerIndex(ModuleManifest::CODE, PageModulePageProvider::class);
+        $container->get(ModulePageRegistry::class)->registerEditor(ModuleManifest::CODE, PageModulePageProvider::class);
+        $container->get(EditorRegistry::class)->register(ModuleManifest::CODE, PageEditor::class);
+        (new PageActionRegistrar($container->get(ModuleActionRegistry::class)))->register();
         $container->get(PublicCmsRouteHandlerRegistry::class)->registerFactory(
-            'cms.page',
+            ModuleManifest::CODE,
             static fn(ContainerInterface $container): PublicPageRouteHandler => $container->get(PublicPageRouteHandler::class),
         );
     }

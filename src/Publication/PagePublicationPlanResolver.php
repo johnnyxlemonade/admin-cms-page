@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Lemonade\Cms\Page\Publication;
 
 use DateTimeImmutable;
+use DomainException;
 use Lemonade\Cms\CmsPublicationState;
-use RuntimeException;
 
 /**
  * Zachovava publication metadata a rozpoznava zmenu vyzadujici publish opravneni
@@ -42,7 +42,7 @@ final readonly class PagePublicationPlanResolver
             state: $state,
             publishedAt: $resolvedPublishedAt,
             changed: $publicationChanged,
-            requiresPermission: $publicationChanged
+            requiresPublicationEvent: $publicationChanged
                 && ($state === CmsPublicationState::Published || $currentState === CmsPublicationState::Published),
         );
     }
@@ -54,7 +54,7 @@ final readonly class PagePublicationPlanResolver
     {
         $datetime = DateTimeImmutable::createFromFormat('!Y-m-d\TH:i', trim($value));
         if ($datetime === false || $datetime->format('Y-m-d\TH:i') !== trim($value)) {
-            throw new RuntimeException('page.validation.published_at_invalid');
+            throw new DomainException('page.validation.published_at_invalid');
         }
 
         return $datetime->format('Y-m-d H:i:s');

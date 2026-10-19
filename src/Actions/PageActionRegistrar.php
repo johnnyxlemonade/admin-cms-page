@@ -7,6 +7,7 @@ namespace Lemonade\Cms\Page\Actions;
 use Lemonade\Admin\Action\ModuleActionDefinition;
 use Lemonade\Admin\Action\ModuleActionRegistry;
 use Lemonade\Admin\Action\Presentation\ConfirmationDefinition;
+use Lemonade\Cms\Page\ModuleManifest;
 
 /**
  * Registruje shared editor a lifecycle akce CMS stranek
@@ -30,7 +31,7 @@ final readonly class PageActionRegistrar
      */
     public function register(): void
     {
-        $moduleCode = 'cms.page';
+        $moduleCode = ModuleManifest::CODE;
         $this->actions->register(
             moduleCode: $moduleCode,
             definition: new ModuleActionDefinition(
@@ -49,6 +50,15 @@ final readonly class PageActionRegistrar
                 labelKey: 'admin.common.save',
             ),
             handlerServiceId: self::SAVE_HANDLER,
+        );
+        $this->actions->register(
+            moduleCode: $moduleCode,
+            definition: new ModuleActionDefinition(
+                key: 'change-url',
+                permission: 'cms.page.edit',
+                labelKey: 'admin.url_segment.save',
+            ),
+            handlerServiceId: PageChangeUrlAction::class,
         );
         $this->actions->register(
             moduleCode: $moduleCode,

@@ -12,7 +12,6 @@ use Lemonade\Admin\DataGrid\Query\DataGridQuery;
 use Lemonade\Admin\Localization\LanguageRegistry;
 use Lemonade\Admin\Module\AdminModuleRegistry;
 use Lemonade\Admin\Module\AdminModuleRouteResolver;
-use Lemonade\Admin\Modules\Registry\ModuleRegistry;
 use Lemonade\Admin\Navigation\AdminNavigationGroupRegistry;
 use Lemonade\Admin\Presentation\AdminThumbnailComponent;
 use Lemonade\Admin\Presentation\Models\AdminFileModel;
@@ -155,7 +154,6 @@ final class PageDataGridTest extends TestCase
         );
         $routes = new AdminModuleRouteResolver(
             new AdminModuleRegistry(new AdminNavigationGroupRegistry()),
-            new ModuleRegistry(),
         );
         $router = new Router();
         $router->getNamed(

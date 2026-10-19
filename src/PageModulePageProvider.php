@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Lemonade\Cms\Page;
 
+use Lemonade\Admin\Action\Presentation\AdminActionFormDefinition;
 use Lemonade\Admin\Authorization\AuthorizationService;
 use Lemonade\Admin\DataGrid\DataGridIndexViewModel;
 use Lemonade\Admin\DataGrid\DataGridPrimaryAction;
-use Lemonade\Admin\Editor\AdminEditor\AdminEditorFormDefinition;
-use Lemonade\Admin\Editor\AdminEditor\AdminEditorHeaderContextDefinition;
-use Lemonade\Admin\Editor\AdminEditor\AdminEditorHeaderContextItem;
-use Lemonade\Admin\Editor\AdminEditor\AdminEditorRenderContext;
+use Lemonade\Admin\Editor\AdminEditor\Header\AdminEditorHeaderContextDefinition;
+use Lemonade\Admin\Editor\AdminEditor\Header\AdminEditorHeaderContextItem;
+use Lemonade\Admin\Editor\AdminEditor\Rendering\AdminEditorRenderContext;
 use Lemonade\Admin\Editor\EditorLoaded;
 use Lemonade\Admin\Editor\Exception\EditorEntityNotFoundException;
 use Lemonade\Admin\Icon\AdminIcon;
@@ -66,7 +66,7 @@ final readonly class PageModulePageProvider implements ModuleIndexPageProviderIn
             ? DataGridPrimaryAction::action(
                 translationKey: 'page.actions.create',
                 icon: AdminIcon::PlusLg,
-                form: new AdminEditorFormDefinition(
+                form: new AdminActionFormDefinition(
                     id: 'page-create-draft-form',
                     action: $this->urls->route(
                         name: $this->routes->managementRouteName('pages', 'store'),
@@ -133,12 +133,13 @@ final readonly class PageModulePageProvider implements ModuleIndexPageProviderIn
             static fn(array $translation): bool => $translation['locale'] === $selected['code'],
         ));
         $translation = $page['translations'][0] ?? [];
+        $canonicalPath = trim((string) ($translation['canonical_path'] ?? ''), '/');
         $context = count($locales) > 1
             ? $this->localeContext($locales, $selected['code'], (int) $page['id'])
             : null;
 
         return new ModulePage(
-            view: 'cms-page::editor',
+            view: 'admin::editor',
             title: $this->translator->get('page.editor.title'),
             data: [
                 'adminEditor' => $this->adminEditorDefinitions->create(
@@ -173,8 +174,15 @@ final readonly class PageModulePageProvider implements ModuleIndexPageProviderIn
                 ),
                 'adminEditorContext' => new AdminEditorRenderContext(
                     values: [
-                        'publication_state' => $translation['publication_state'] ?? 0,
-                        'published_at' => $translation['published_at'] ?? null,
+                        'title' => (string) ($translation['title'] ?? ''),
+                        'content' => (string) ($translation['content'] ?? ''),
+                        'page_title' => (string) ($translation['page_title'] ?? ''),
+                        'meta_description' => (string) ($translation['meta_description'] ?? ''),
+                        'url_segment' => $canonicalPath === '' ? '' : basename($canonicalPath),
+                        'parent_id' => $page['parent_id'] === null ? '' : 'page-' . (int) $page['parent_id'],
+                        'template_key' => (string) ($page['template_key'] ?? ''),
+                        'publication_state' => (string) ($translation['publication_state'] ?? 0),
+                        'published_at' => (string) ($translation['published_at'] ?? ''),
                     ],
                     oldInput: $input,
                     errors: $errors,

@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Lemonade\Cms\Page\Actions;
 
+use DomainException;
 use Lemonade\Admin\Action\Contract\ModuleActionHandlerInterface;
 use Lemonade\Admin\Action\Exception\ModuleActionException;
 use Lemonade\Admin\Action\ModuleActionResult;
-use Lemonade\Admin\Audit\AuditActor;
 use Lemonade\Admin\Http\AdminErrorCode;
 use Lemonade\Admin\Identity\LocalActorGuard;
 use Lemonade\Admin\Identity\LocalActorRequiredException;
@@ -44,7 +44,7 @@ final readonly class PageReorderAction implements ModuleActionHandlerInterface
         }
 
         try {
-            $actor = AuditActor::user($this->actors->requireLocalUser()->id());
+            $actor = $this->actors->requireAuditActor();
             $this->pages->reorder(
                 actor: $actor,
                 pageId: $id,
@@ -56,7 +56,7 @@ final readonly class PageReorderAction implements ModuleActionHandlerInterface
                 AdminErrorCode::LOCAL_ACTOR_REQUIRED,
                 $exception->getMessage(),
             );
-        } catch (\RuntimeException $exception) {
+        } catch (DomainException $exception) {
             return ModuleActionResult::invalid(['_form' => $exception->getMessage()]);
         }
 

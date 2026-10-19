@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Lemonade\Cms\Page\Editor;
 
-use Lemonade\Admin\Audit\AuditActor;
+use DomainException;
 use Lemonade\Admin\Editor\Contract\EditorProviderInterface;
 use Lemonade\Admin\Editor\EditorDefinition;
 use Lemonade\Admin\Editor\EditorFieldDefinition;
@@ -54,10 +54,8 @@ final readonly class PageEditor implements EditorProviderInterface
                 new EditorFieldDefinition(name: 'meta_description', type: 'text', readOnly: false, permission: null),
                 new EditorFieldDefinition(name: 'parent_id', type: 'text', readOnly: false, permission: null),
                 new EditorFieldDefinition(name: 'template_key', type: 'text', readOnly: false, permission: null),
-                new EditorFieldDefinition(name: 'url_segment', type: 'text', readOnly: false, permission: null),
-                new EditorFieldDefinition(name: 'url_segment_edited', type: 'text', readOnly: false, permission: null),
-                new EditorFieldDefinition(name: 'publication_state', type: 'text', readOnly: false, permission: null),
-                new EditorFieldDefinition(name: 'published_at', type: 'text', readOnly: false, permission: null),
+                new EditorFieldDefinition(name: 'publication_state', type: 'text', readOnly: false, permission: 'cms.page.publish'),
+                new EditorFieldDefinition(name: 'published_at', type: 'text', readOnly: false, permission: 'cms.page.publish'),
             ],
         );
     }
@@ -108,13 +106,13 @@ final readonly class PageEditor implements EditorProviderInterface
     public function update(int $id, array $data): EditorSaveResult
     {
         try {
-            $actor = AuditActor::user($this->actors->requireLocalUser()->id());
+            $actor = $this->actors->requireAuditActor();
             $this->service->save(
                 actor: $actor,
                 pageId: $id,
                 data: $data,
             );
-        } catch (\RuntimeException $exception) {
+        } catch (DomainException $exception) {
             throw new EditorValidationException($exception->getMessage(), previous: $exception);
         }
 
@@ -130,13 +128,13 @@ final readonly class PageEditor implements EditorProviderInterface
     public function create(array $data): EditorSaveResult
     {
         try {
-            $actor = AuditActor::user($this->actors->requireLocalUser()->id());
+            $actor = $this->actors->requireAuditActor();
             $locale = $this->languages->defaultLocale();
             $pageId = $this->service->createDraft(
                 actor: $actor,
                 locale: $locale,
             );
-        } catch (\RuntimeException $exception) {
+        } catch (DomainException $exception) {
             throw new EditorValidationException($exception->getMessage(), previous: $exception);
         }
 

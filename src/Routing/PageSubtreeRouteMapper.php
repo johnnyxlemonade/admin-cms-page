@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Lemonade\Cms\Page\Routing;
 
-use RuntimeException;
+use DomainException;
 
 /**
  * Prepocita existujici lokalizovane routy celeho podstromu pod novy prefix
@@ -24,7 +24,7 @@ final readonly class PageSubtreeRouteMapper
             if ($prefix === null
                 || ($route['path'] !== $prefix['old'] && !str_starts_with($route['path'], $prefix['old'] . '/'))
             ) {
-                throw new RuntimeException('page.validation.route_inconsistent');
+                throw new DomainException('page.validation.route_inconsistent');
             }
             $replacements[] = [
                 'entityId' => $route['entity_id'],

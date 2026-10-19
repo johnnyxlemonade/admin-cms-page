@@ -4,11 +4,8 @@ declare(strict_types=1);
 
 namespace Lemonade\Cms\Page\Tests\Unit\Services;
 
+use DomainException;
 use Lemonade\Admin\Audit\AuditActor;
-use Lemonade\Admin\Auth\AdminPrincipalInterface;
-use Lemonade\Admin\Auth\AuthenticatedUser;
-use Lemonade\Admin\Authorization\AuthorizationService;
-use Lemonade\Admin\Authorization\CurrentPrincipalProviderInterface;
 use Lemonade\Admin\Event\TransactionalEventProcessor;
 use Lemonade\Admin\Localization\LanguageRegistry;
 use Lemonade\Cms\Page\Models\PageModel;
@@ -31,7 +28,6 @@ use Lemonade\Framework\Support\Slug\Slugger;
 use Lemonade\Framework\View\ViewRendererInterface;
 use PHPUnit\Framework\TestCase;
 use Psr\Http\Message\ResponseInterface;
-use RuntimeException;
 
 /**
  * Overuje save rozhodnuti Pages bez databazovych write integraci
@@ -41,15 +37,17 @@ final class PageServiceValidationTest extends TestCase
     /**
      * Skutecny no-op neotevre auditovanou transakci ani neprovede write
      */
-    public function testNoOpSaveDoesNotEnterAuditedMutation(): void
+    public function testNoOpSaveWithoutPublicationInputDoesNotEnterAuditedMutation(): void
     {
         $service = $this->service(
             currentTemplate: 'content',
             translation: $this->translation(),
             routePath: 'kontakt',
         );
+        $payload = $this->payload();
+        unset($payload['publication_state'], $payload['published_at']);
 
-        $service->save(AuditActor::user(1), 7, $this->payload());
+        $service->save(AuditActor::user(1), 7, $payload);
 
         self::expectNotToPerformAssertions();
     }
@@ -81,7 +79,7 @@ final class PageServiceValidationTest extends TestCase
             routePath: null,
         );
 
-        $this->expectException(RuntimeException::class);
+        $this->expectException(DomainException::class);
         $this->expectExceptionMessage('page.validation.locale_invalid');
 
         $service->save(AuditActor::user(1), 7, $this->payload(locale: 'de'));
@@ -118,7 +116,7 @@ final class PageServiceValidationTest extends TestCase
             routePath: 'kontakt',
         );
 
-        $this->expectException(RuntimeException::class);
+        $this->expectException(DomainException::class);
         $this->expectExceptionMessage('page.validation.template_invalid');
 
         $service->save(
@@ -139,7 +137,7 @@ final class PageServiceValidationTest extends TestCase
             routePath: 'kontakt',
         );
 
-        $this->expectException(RuntimeException::class);
+        $this->expectException(DomainException::class);
         $this->expectExceptionMessage('page.validation.template_invalid');
 
         $service->save(
@@ -188,7 +186,6 @@ final class PageServiceValidationTest extends TestCase
             languages: new LanguageRegistry($database, new CacheManager(new ArrayCacheItemPool())),
             routes: $this->instanceWithoutConstructor(CmsRouteReservationService::class),
             slugger: new Slugger(),
-            authorization: new AuthorizationService(new CurrentUserStub(), $database),
             events: $this->instanceWithoutConstructor(TransactionalEventProcessor::class),
             templates: new PageServiceTemplateRendererStub(),
             subtreeRoutes: new PageSubtreeRouteMapper(),
@@ -259,8 +256,6 @@ final class PageServiceValidationTest extends TestCase
             'meta_description' => '',
             'parent_id' => '',
             'template_key' => $templateKey,
-            'url_segment' => 'kontakt',
-            'url_segment_edited' => '0',
             'publication_state' => (string) $publicationState,
             'published_at' => '',
         ];
@@ -276,29 +271,6 @@ final class PageServiceValidationTest extends TestCase
     private function instanceWithoutConstructor(string $class): object
     {
         return (new \ReflectionClass($class))->newInstanceWithoutConstructor();
-    }
-}
-
-/**
- * Poskytuje prihlaseneho uzivatele pro permission boundary unit testu
- */
-final readonly class CurrentUserStub implements CurrentPrincipalProviderInterface
-{
-    private AuthenticatedUser $user;
-
-    public function __construct()
-    {
-        $this->user = new AuthenticatedUser(1, 'admin@example.test');
-    }
-
-    public function currentPrincipal(): ?AdminPrincipalInterface
-    {
-        return null;
-    }
-
-    public function currentUser(): AuthenticatedUser
-    {
-        return $this->user;
     }
 }
 

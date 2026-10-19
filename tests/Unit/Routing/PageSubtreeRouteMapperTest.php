@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Lemonade\Cms\Page\Tests\Unit\Routing;
 
+use DomainException;
 use Lemonade\Cms\Page\Routing\PageSubtreeRouteMapper;
 use PHPUnit\Framework\TestCase;
-use RuntimeException;
 
 /**
  * Overuje lokalizovany presun celeho podstromu bez noveho vyhodnoceni URL
@@ -44,7 +44,7 @@ final class PageSubtreeRouteMapperTest extends TestCase
      */
     public function testRejectsRouteOutsideDeclaredLocalePrefix(): void
     {
-        $this->expectException(RuntimeException::class);
+        $this->expectException(DomainException::class);
         $this->expectExceptionMessage('page.validation.route_inconsistent');
 
         (new PageSubtreeRouteMapper())->replacements(

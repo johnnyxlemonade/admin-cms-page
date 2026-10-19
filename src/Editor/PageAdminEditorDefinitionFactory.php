@@ -4,20 +4,20 @@ declare(strict_types=1);
 
 namespace Lemonade\Cms\Page\Editor;
 
-use Lemonade\Admin\Editor\AdminEditor\AdminEditorActionDefinition;
+use Lemonade\Admin\Action\Presentation\AdminActionFormDefinition;
+use Lemonade\Admin\Editor\AdminEditor\Action\AdminEditorActionDefinition;
+use Lemonade\Admin\Editor\AdminEditor\Action\AdminEditorSaveBarDefinition;
 use Lemonade\Admin\Editor\AdminEditor\AdminEditorBuilder;
 use Lemonade\Admin\Editor\AdminEditor\AdminEditorDefinition;
-use Lemonade\Admin\Editor\AdminEditor\AdminEditorFieldDefinition;
-use Lemonade\Admin\Editor\AdminEditor\AdminEditorFormDefinition;
-use Lemonade\Admin\Editor\AdminEditor\AdminEditorHeaderContextDefinition;
-use Lemonade\Admin\Editor\AdminEditor\AdminEditorHeaderDefinition;
-use Lemonade\Admin\Editor\AdminEditor\AdminEditorSaveBarDefinition;
-use Lemonade\Admin\Editor\AdminEditor\AdminEditorSidebarDefinition;
-use Lemonade\Admin\Editor\AdminEditor\AdminEditorTab;
-use Lemonade\Admin\Editor\AdminEditor\CustomViewBlock;
-use Lemonade\Admin\Editor\AdminEditor\FieldColumn;
-use Lemonade\Admin\Editor\AdminEditor\FieldGroupBlock;
-use Lemonade\Admin\Editor\AdminEditor\SectionBlock;
+use Lemonade\Admin\Editor\AdminEditor\Field\Field;
+use Lemonade\Admin\Editor\AdminEditor\Header\AdminEditorHeaderContextDefinition;
+use Lemonade\Admin\Editor\AdminEditor\Header\AdminEditorHeaderDefinition;
+use Lemonade\Admin\Editor\AdminEditor\Layout\AdminEditorSidebarDefinition;
+use Lemonade\Admin\Editor\AdminEditor\Layout\AdminEditorTab;
+use Lemonade\Admin\Editor\AdminEditor\Layout\CustomViewBlock;
+use Lemonade\Admin\Editor\AdminEditor\Layout\FieldColumn;
+use Lemonade\Admin\Editor\AdminEditor\Layout\FieldGroupBlock;
+use Lemonade\Admin\Editor\AdminEditor\Layout\SectionBlock;
 use Lemonade\Admin\Module\AdminModuleRouteResolver;
 use Lemonade\Admin\Presentation\AdminFileUploadCollection;
 use Lemonade\Framework\Routing\UrlGenerator;
@@ -73,14 +73,13 @@ final readonly class PageAdminEditorDefinitionFactory
                     descriptionKey: 'admin.editor.unsaved_changes_help',
                 ),
             )
-            ->tab($this->contentTab($translation, $contentLocale, $canPublish))
+            ->tab($this->contentTab($contentLocale))
             ->tab($this->seoTab($translation))
-            ->tab($this->settingsTab($page, $translation, $parentOptions, $templateOptions))
+            ->tab($this->settingsTab($parentOptions, $templateOptions))
             ->tab($this->mediaTab('gallery', 'admin.file_upload.gallery', 'admin.file_upload.gallery', $galleryUpload))
             ->tab($this->mediaTab('attachments', 'admin.file_upload.attachments', 'admin.file_upload.attachments', $attachmentUpload));
 
         $sidebarSections = $this->sidebarSections(
-            translation: $translation,
             canPublish: $canPublish,
             featuredImageUpload: $featuredImageUpload,
         );
@@ -94,11 +93,11 @@ final readonly class PageAdminEditorDefinitionFactory
     /**
      * Vytvori canonical save transport se zachovanym content locale
      */
-    private function form(int $pageId, string $contentLocale): AdminEditorFormDefinition
+    private function form(int $pageId, string $contentLocale): AdminActionFormDefinition
     {
         $params = ['module' => 'pages', 'id' => $pageId, 'locale' => $contentLocale];
 
-        return new AdminEditorFormDefinition(
+        return new AdminActionFormDefinition(
             id: 'page-editor-form',
             action: $this->urls->route($this->routes->managementRouteName('pages', 'update'), $params),
             actionUrl: $this->urls->route($this->routes->managementRouteName('pages', 'ajax.entity'), $params),
@@ -132,40 +131,23 @@ final readonly class PageAdminEditorDefinitionFactory
     /**
      * Vytvori tab nadpisu a rich-text obsahu jedne mutation
      *
-     * @param array<string,mixed> $translation
      */
-    private function contentTab(array $translation, string $locale, bool $canPublish): AdminEditorTab
+    private function contentTab(string $locale): AdminEditorTab
     {
         $fields = [
-            new FieldColumn(AdminEditorFieldDefinition::hidden('locale')->defaultValue($locale), md: 12),
+            new FieldColumn(Field::hidden('locale')->defaultValue($locale), md: 12),
             new FieldColumn(
-                AdminEditorFieldDefinition::text('title', labelKey: 'page.fields.title')
+                Field::text('title', labelKey: 'page.fields.title')
                     ->required()
-                    ->attributes(['maxlength' => '180'])
-                    ->value((string) ($translation['title'] ?? '')),
+                    ->attributes(['maxlength' => '180']),
                 md: 12,
             ),
             new FieldColumn(
-                AdminEditorFieldDefinition::textarea('content', labelKey: 'page.fields.content')
-                    ->richText()
-                    ->imageUpload()
-                    ->fileUpload()
-                    ->value((string) ($translation['content'] ?? '')),
+                Field::textarea('content', labelKey: 'page.fields.content')
+                    ->richText(imageUpload: true, fileUpload: true),
                 md: 12,
             ),
         ];
-        if (!$canPublish) {
-            $fields[] = new FieldColumn(
-                AdminEditorFieldDefinition::hidden('publication_state')->defaultValue((string) ($translation['publication_state'] ?? 0)),
-                md: 12,
-            );
-            $fields[] = new FieldColumn(
-                AdminEditorFieldDefinition::hidden('published_at')
-                    ->defaultValue((string) ($translation['published_at'] ?? '')),
-                md: 12,
-            );
-        }
-
         return new AdminEditorTab(
             id: 'content',
             label: '',
@@ -196,17 +178,26 @@ final readonly class PageAdminEditorDefinitionFactory
                     blocks: [
                         new FieldGroupBlock([
                             new FieldColumn(
-                                AdminEditorFieldDefinition::text('page_title', labelKey: 'page.fields.page_title')
+                                Field::text('page_title', labelKey: 'page.fields.page_title')
                                     ->attributes(['maxlength' => '180'])
-                                    ->help('', 'page.fields.page_title_help')
-                                    ->value((string) ($translation['page_title'] ?? '')),
+                                    ->help('', 'page.fields.page_title_help'),
                                 md: 12,
                             ),
                             new FieldColumn(
-                                AdminEditorFieldDefinition::textarea('meta_description', labelKey: 'page.fields.meta_description')
+                                Field::textarea('meta_description', labelKey: 'page.fields.meta_description')
                                     ->attributes(['maxlength' => '255'])
-                                    ->help('', 'page.fields.meta_description_help')
-                                    ->value((string) ($translation['meta_description'] ?? '')),
+                                    ->help('', 'page.fields.meta_description_help'),
+                                md: 12,
+                            ),
+                            new FieldColumn(
+                                Field::urlSegment('url_segment')
+                                    ->attributes(['maxlength' => '180'])
+                                    ->prefix($this->urlPrefix($translation))
+                                    ->source(
+                                        field: 'title',
+                                        autoGenerate: trim((string) ($translation['canonical_path'] ?? '')) === '',
+                                    )
+                                    ->action('change-url'),
                                 md: 12,
                             ),
                         ]),
@@ -222,12 +213,10 @@ final readonly class PageAdminEditorDefinitionFactory
     }
 
     /**
-     * @param array<string,mixed> $page
-     * @param array<string,mixed> $translation
      * @param array<string,string> $parentOptions
      * @param array<string,string> $templateOptions
      */
-    private function settingsTab(array $page, array $translation, array $parentOptions, array $templateOptions): AdminEditorTab
+    private function settingsTab(array $parentOptions, array $templateOptions): AdminEditorTab
     {
         return new AdminEditorTab(
             id: 'settings',
@@ -236,24 +225,13 @@ final readonly class PageAdminEditorDefinitionFactory
                 id: 'settings',
                 blocks: [new FieldGroupBlock([
                     new FieldColumn(
-                        AdminEditorFieldDefinition::select('parent_id', labelKey: 'page.fields.parent')
-                            ->options($parentOptions)
-                            ->value($page['parent_id'] === null ? '' : 'page-' . (int) $page['parent_id']),
+                        Field::select('parent_id', labelKey: 'page.fields.parent')
+                            ->options($parentOptions),
                         md: 6,
                     ),
                     new FieldColumn(
-                        AdminEditorFieldDefinition::select('template_key', labelKey: 'page.fields.template')
-                            ->options($templateOptions)
-                            ->value((string) ($page['template_key'] ?? '')),
-                        md: 6,
-                    ),
-                    new FieldColumn(
-                        AdminEditorFieldDefinition::readonlyEditable('url_segment', labelKey: 'page.fields.url_segment')
-                            ->attributes(['maxlength' => '180'])
-                            ->help('', 'page.fields.url_segment_help')
-                            ->unlock('', 'page.editor.edit_url')
-                            ->marker(AdminEditorFieldDefinition::hidden('url_segment_edited')->defaultValue('0'))
-                            ->value((string) ($translation['url_segment'] ?? '')),
+                        Field::select('template_key', labelKey: 'page.fields.template')
+                            ->options($templateOptions),
                         md: 6,
                     ),
                 ])],
@@ -262,6 +240,21 @@ final readonly class PageAdminEditorDefinitionFactory
             )],
             labelKey: 'page.editor.tabs.settings',
         );
+    }
+
+    /**
+     * Vrati needitovatelnou rodicovskou cast canonical cesty
+     *
+     * @param array<string,mixed> $translation
+     */
+    private function urlPrefix(array $translation): string
+    {
+        $path = trim((string) ($translation['canonical_path'] ?? ''), '/');
+        if ($path === '' || !str_contains($path, '/')) {
+            return '/';
+        }
+
+        return '/' . substr($path, 0, (int) strrpos($path, '/') + 1);
     }
 
     /**
@@ -311,11 +304,9 @@ final readonly class PageAdminEditorDefinitionFactory
     /**
      * Sestavi publikacni panel a shared upload nahledoveho obrazku
      *
-     * @param array<string,mixed> $translation
      * @return list<SectionBlock>
      */
     private function sidebarSections(
-        array $translation,
         bool $canPublish,
         ?AdminFileUploadCollection $featuredImageUpload,
     ): array {
@@ -326,19 +317,17 @@ final readonly class PageAdminEditorDefinitionFactory
                 blocks: [
                     new FieldGroupBlock([
                         new FieldColumn(
-                            AdminEditorFieldDefinition::select('publication_state', labelKey: 'page.fields.publication_state')
+                            Field::select('publication_state', labelKey: 'page.fields.publication_state')
                                 ->options(['0' => '', '1' => '', '2' => ''])
                                 ->optionLabelKeys([
                                     '0' => 'admin.status.new',
                                     '1' => 'admin.status.draft',
                                     '2' => 'admin.status.published',
-                                ])
-                                ->value((string) ($translation['publication_state'] ?? 0)),
+                                ]),
                             md: 12,
                         ),
                         new FieldColumn(
-                            AdminEditorFieldDefinition::datetimeLocal('published_at', labelKey: 'page.fields.published_at')
-                                ->value((string) ($translation['published_at'] ?? '')),
+                            Field::datetimeLocal('published_at', labelKey: 'page.fields.published_at'),
                             md: 12,
                         ),
                     ]),

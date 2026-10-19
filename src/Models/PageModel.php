@@ -398,11 +398,6 @@ final class PageModel extends Model
             ->where('translation.page_id', $pageId)
             ->orderBy('translation.locale', 'ASC')
             ->getArray();
-        foreach ($translations as &$translation) {
-            $path = (string) ($translation['canonical_path'] ?? '');
-            $translation['url_segment'] = $path === '' ? '' : basename($path);
-        }
-        unset($translation);
         $page['translations'] = $translations;
 
         return $page;

@@ -7,20 +7,20 @@ namespace Lemonade\Cms\Page\Tests\Unit;
 use Lemonade\Admin\Module\Contract\AdminModuleFileCapabilitiesInterface;
 use Lemonade\Admin\Presentation\AdminFilePresentation;
 use Lemonade\Admin\Presentation\AdminFileUsageRegistry;
-use Lemonade\Cms\Page\PageModuleDefinition;
+use Lemonade\Cms\Page\ModuleManifest;
 use PHPUnit\Framework\TestCase;
 
 /**
  * Overuje file capability a shared usage kontrakty CMS stranek
  */
-final class PageModuleDefinitionTest extends TestCase
+final class ModuleManifestAdminDefinitionTest extends TestCase
 {
     /**
      * Deklaruje stejne file capability jako ostatni plny CMS content modul
      */
     public function testDefinesCompleteFileCapabilities(): void
     {
-        $definition = new PageModuleDefinition();
+        $definition = new ModuleManifest();
 
         self::assertInstanceOf(AdminModuleFileCapabilitiesInterface::class, $definition);
         self::assertSame(AdminFilePresentation::Landscape, $definition->fileCapabilities()->thumbnail);
@@ -35,7 +35,7 @@ final class PageModuleDefinitionTest extends TestCase
      */
     public function testRegistersAllFileUsagesForCanonicalModuleCode(): void
     {
-        $definition = new PageModuleDefinition();
+        $definition = new ModuleManifest();
         $registry = new AdminFileUsageRegistry();
         $registry->registerCapabilities($definition->code(), $definition->fileCapabilities());
 
