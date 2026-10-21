@@ -431,6 +431,33 @@ final class PageModel extends Model
     }
 
     /**
+     * Vrati aktivni locale a deaktivovane locale s existujici Page mutaci
+     *
+     * @return list<array{code:string,name:string}>
+     */
+    public function dataGridLocales(): array
+    {
+        /** @var list<array{code:string,name:string}> $rows */
+        $rows = QueryBuilder::make($this->db)
+            ->table('system_language language')
+            ->select(['language.code', 'language.name'])
+            ->join(
+                'cms_page_translation translation',
+                'translation.locale = language.code',
+                'LEFT',
+            )
+            ->whereRaw('language.enabled = 1 OR translation.id IS NOT NULL')
+            ->groupBy('language.code')
+            ->groupBy('language.name')
+            ->groupBy('language.sort_order')
+            ->orderBy('language.sort_order', 'ASC')
+            ->orderBy('language.code', 'ASC')
+            ->getArray();
+
+        return $rows;
+    }
+
+    /**
      * Rozhodne, zda ma stranka publikovane potomky v locale
      *
      * @param list<int> $descendantIds

@@ -245,7 +245,11 @@ final readonly class PageModulePageProvider implements ModuleIndexPageProviderIn
                 active: $code === $selectedLocale,
                 secondary: !$enabled
                     ? $this->translator->get('page.editor.locale.disabled')
-                    : (!$hasTranslation ? $this->translator->get('page.editor.locale.new_translation') : null),
+                    : ($hasTranslation
+                        ? $this->translator->get('page.editor.locale.existing_translation')
+                        : $this->translator->get('page.editor.locale.new_translation')),
+                code: $code,
+                translationExists: $hasTranslation,
             );
         }
 

@@ -8,6 +8,7 @@ use Lemonade\Admin\Action\ModuleActionRegistry;
 use Lemonade\Admin\Action\Presentation\ModuleActionPresentationFactory;
 use Lemonade\Admin\Authorization\AuthorizationService;
 use Lemonade\Admin\Authorization\CurrentPrincipalProviderInterface;
+use Lemonade\Admin\DataGrid\DataGridRowDefinition;
 use Lemonade\Admin\DataGrid\Query\DataGridQuery;
 use Lemonade\Admin\Localization\LanguageRegistry;
 use Lemonade\Admin\Module\AdminModuleRegistry;
@@ -15,6 +16,7 @@ use Lemonade\Admin\Module\AdminModuleRouteResolver;
 use Lemonade\Admin\Navigation\AdminNavigationGroupRegistry;
 use Lemonade\Admin\Presentation\AdminThumbnailComponent;
 use Lemonade\Admin\Presentation\Models\AdminFileModel;
+use Lemonade\Cms\CmsPublicationState;
 use Lemonade\Cms\Page\Actions\PageActionRegistrar;
 use Lemonade\Cms\Page\DataGrid\PageDataGrid;
 use Lemonade\Cms\Page\Models\PageModel;
@@ -112,6 +114,139 @@ final class PageDataGridTest extends TestCase
     }
 
     /**
+     * Root bez zvolene jazykove mutace nevystupuje jako novy zaznam
+     */
+    public function testMissingLocaleTranslationIsNotPresentedAsNewRecord(): void
+    {
+        $grid = $this->grid([
+            [],
+            [$this->pageRow(7)],
+        ]);
+
+        $result = $grid->execute($this->query(locale: 'en'));
+
+        self::assertSame(0, $result->total());
+        self::assertSame([], $result->items());
+    }
+
+    /**
+     * Prazdna existujici mutace pouziva shared placeholder a ulozeny stav
+     */
+    public function testExistingEmptyTranslationUsesSharedPlaceholderAndPersistedState(): void
+    {
+        $grid = $this->grid([
+            [$this->translationRow(7, null, CmsPublicationState::New)],
+            [$this->pageRow(7)],
+            [],
+        ]);
+
+        $row = $grid->execute($this->query(locale: 'en'))->items()[0]->toArray();
+
+        self::assertSame('admin.datagrid.untitled', $this->cellValue($row, 'title'));
+        self::assertSame('admin.status.new', $this->cellValue($row, 'state'));
+    }
+
+    /**
+     * Draft i publikovana mutace zustavaji ve zvolenem locale viditelne
+     */
+    public function testDraftAndPublishedTranslationsKeepTheirPublicationState(): void
+    {
+        $grid = $this->grid([
+            [
+                $this->translationRow(7, 'Draft', CmsPublicationState::Draft),
+                $this->translationRow(8, 'Published', CmsPublicationState::Published),
+            ],
+            [
+                $this->pageRow(7, sortOrder: 0),
+                $this->pageRow(8, sortOrder: 1),
+            ],
+            [],
+        ]);
+
+        $rows = array_map(
+            static fn(DataGridRowDefinition $row): array => $row->toArray(),
+            $grid->execute($this->query(locale: 'en'))->items(),
+        );
+
+        self::assertSame('admin.status.draft', $this->cellValue($rows[0], 'state'));
+        self::assertSame('admin.status.published', $this->cellValue($rows[1], 'state'));
+    }
+
+    /**
+     * Chybejici mutace rodice je zobrazena pouze jako stromovy kontext potomka
+     */
+    public function testMissingAncestorTranslationIsMarkedAsStructuralContext(): void
+    {
+        $grid = $this->grid([
+            [$this->translationRow(8, 'Child', CmsPublicationState::Draft)],
+            [
+                $this->pageRow(7, sortOrder: 0),
+                $this->pageRow(8, parentId: 7, sortOrder: 0),
+            ],
+            [],
+        ]);
+
+        $rows = array_map(
+            static fn(DataGridRowDefinition $row): array => $row->toArray(),
+            $grid->execute($this->query(locale: 'en'))->items(),
+        );
+
+        self::assertSame('page.list.structural_context', $this->cellValue($rows[0], 'title'));
+        self::assertSame('page.list.structural_context_state', $this->cellValue($rows[0], 'state'));
+        self::assertSame('Child', $this->cellValue($rows[1], 'title'));
+        $tree = $rows[1]['tree'] ?? null;
+        self::assertIsArray($tree);
+        self::assertSame(7, $tree['parentId']);
+    }
+
+    /**
+     * Explicitni locale filtr zachova existujici mutaci i bez enabled lookupu
+     */
+    public function testExistingTranslationRemainsVisibleForExplicitDisabledLocale(): void
+    {
+        $grid = $this->grid([
+            [$this->translationRow(7, 'Archiv', CmsPublicationState::Draft)],
+            [$this->pageRow(7)],
+            [],
+        ]);
+
+        $row = $grid->execute($this->query(locale: 'de'))->items()[0]->toArray();
+
+        self::assertSame('Archiv', $this->cellValue($row, 'title'));
+        self::assertSame('admin.status.draft', $this->cellValue($row, 'state'));
+    }
+
+    /**
+     * Locale filtr nabizi aktivni jazyky i deaktivovany jazyk s mutaci
+     */
+    public function testDataGridLocalesIncludeDisabledLanguageWithTranslation(): void
+    {
+        $capturedSql = '';
+        $result = $this->createMock(DatabaseResultInterface::class);
+        $result->method('result_array')->willReturn([
+            ['code' => 'cs', 'name' => 'Čeština'],
+            ['code' => 'en', 'name' => 'English'],
+        ]);
+        $driver = $this->createMock(DatabaseDriverInterface::class);
+        $driver->method('protect_identifiers')->willReturnCallback(
+            static fn(string $identifier): string => $identifier,
+        );
+        $driver->method('query')->willReturnCallback(
+            static function (string $sql) use (&$capturedSql, $result): DatabaseResultInterface {
+                $capturedSql = $sql;
+
+                return $result;
+            },
+        );
+
+        $locales = (new PageModel($driver))->dataGridLocales();
+
+        self::assertSame(['cs', 'en'], array_column($locales, 'code'));
+        self::assertStringContainsString('LEFT JOIN cms_page_translation translation', $capturedSql);
+        self::assertStringContainsString('language.enabled = 1 OR translation.id IS NOT NULL', $capturedSql);
+    }
+
+    /**
      * Vytvori grid nad predanymi DB-free vysledky dotazu
      *
      * @param list<list<array<string,mixed>>> $queryRows
@@ -197,7 +332,7 @@ final class PageDataGridTest extends TestCase
     /**
      * Vytvori vychozi dotaz stromoveho gridu
      */
-    private function query(): DataGridQuery
+    private function query(string $locale = 'cs'): DataGridQuery
     {
         return new DataGridQuery(
             page: 1,
@@ -205,7 +340,63 @@ final class PageDataGridTest extends TestCase
             sortKey: 'sortOrder',
             sortDirection: 'asc',
             search: '',
-            filters: ['locale' => 'cs'],
+            filters: ['locale' => $locale],
         );
+    }
+
+    /**
+     * Vytvori lokalizovanou DataGrid projekci stranky
+     *
+     * @return array<string,mixed>
+     */
+    private function translationRow(int $pageId, ?string $title, CmsPublicationState $state): array
+    {
+        return [
+            'page_id' => $pageId,
+            'title' => $title,
+            'publication_state' => $state->value,
+            'published_at' => $state === CmsPublicationState::Published ? '2026-10-20 10:00:00' : null,
+            'canonical_path' => $title === null ? null : strtolower($title),
+        ];
+    }
+
+    /**
+     * Vytvori root radek stromu pro DB-free DataGrid scenar
+     *
+     * @return array<string,mixed>
+     */
+    private function pageRow(
+        int $pageId,
+        ?int $parentId = null,
+        int $sortOrder = 0,
+    ): array {
+        return [
+            'id' => $pageId,
+            'parent_id' => $parentId,
+            'sort_order' => $sortOrder,
+            'template_key' => 'content',
+            'updated_at' => '2026-10-20 10:00:00',
+            'deleted_at' => null,
+        ];
+    }
+
+    /**
+     * Vrati textovou hodnotu serializovane typed bunky
+     *
+     * @param array<string,mixed> $row
+     */
+    private function cellValue(array $row, string $key): string
+    {
+        $cells = $row['cells'] ?? null;
+        self::assertIsArray($cells);
+        $cell = $cells[$key] ?? null;
+        self::assertIsArray($cell);
+        self::assertArrayHasKey(0, $cell);
+        $presentation = $cell[0];
+        self::assertIsArray($presentation);
+        $value = $presentation['value'] ?? null;
+        self::assertIsString($value);
+
+        return $value;
     }
 }

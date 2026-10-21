@@ -88,7 +88,7 @@ final readonly class PageDataGrid implements DataGridProviderInterface
                 ])),
                 new DataGridFilterDefinition('locale', new StaticSelectOptionSource(array_map(
                     fn(array $language): SelectOptionDefinition => new SelectOptionDefinition($language['code'], $language['name']),
-                    $this->languages->enabledLocales(),
+                    $this->pages->dataGridLocales(),
                 ))),
                 new DataGridFilterDefinition('parent', new StaticSelectOptionSource($this->parentFilterOptions())),
             ],
@@ -164,7 +164,10 @@ final readonly class PageDataGrid implements DataGridProviderInterface
                 continue;
             }
             $translation = $translations[(int) $row['id']] ?? null;
-            $state = (int) ($translation['publication_state'] ?? CmsPublicationState::New->value);
+            if ($translation === null) {
+                continue;
+            }
+            $state = (int) $translation['publication_state'];
             $requiredState = match ($query->filter('state')) {
                 'new' => CmsPublicationState::New,
                 'draft' => CmsPublicationState::Draft,
@@ -269,9 +272,14 @@ final readonly class PageDataGrid implements DataGridProviderInterface
         $pageId = (int) $page['id'];
         $deleted = $page['deleted_at'] !== null;
         $editable = !$deleted && $this->authorization->hasPermission('cms.page.edit');
+        $hasTranslation = $translation !== null;
         $title = trim((string) ($translation['title'] ?? ''));
-        $title = $title === '' ? $this->translator->get('page.list.untitled_locale', ['locale' => $locale]) : $title;
-        $state = CmsPublicationState::tryFrom((int) ($translation['publication_state'] ?? 0)) ?? CmsPublicationState::New;
+        $title = $hasTranslation
+            ? ($title === '' ? $this->translator->get('admin.datagrid.untitled') : $title)
+            : $this->translator->get('page.list.structural_context', ['locale' => $locale]);
+        $state = $hasTranslation
+            ? CmsPublicationState::tryFrom((int) $translation['publication_state']) ?? CmsPublicationState::New
+            : null;
 
         return new DataGridRowDefinition(
             id: $pageId,
@@ -298,14 +306,19 @@ final readonly class PageDataGrid implements DataGridProviderInterface
                         : '',
                     url: $editable ? $this->editUrl($pageId, $locale) : null,
                 ),
-                'state' => new StatusCell(
-                    $this->translator->get('admin.status.' . match ($state) {
-                        CmsPublicationState::New => 'new',
-                        CmsPublicationState::Draft => 'draft',
-                        CmsPublicationState::Published => 'published',
-                    }),
-                    $state === CmsPublicationState::Published ? StatusVariant::Success : StatusVariant::Muted,
-                ),
+                'state' => $state === null
+                    ? new StatusCell(
+                        $this->translator->get('page.list.structural_context_state'),
+                        StatusVariant::Muted,
+                    )
+                    : new StatusCell(
+                        $this->translator->get('admin.status.' . match ($state) {
+                            CmsPublicationState::New => 'new',
+                            CmsPublicationState::Draft => 'draft',
+                            CmsPublicationState::Published => 'published',
+                        }),
+                        $state === CmsPublicationState::Published ? StatusVariant::Success : StatusVariant::Muted,
+                    ),
                 'template' => new ScalarCell((string) $page['template_key']),
                 'sortOrder' => new ScalarCell((int) $page['sort_order']),
                 'updatedAt' => new ScalarCell((string) $page['updated_at']),
