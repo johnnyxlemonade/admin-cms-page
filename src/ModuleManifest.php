@@ -11,7 +11,6 @@ use Lemonade\Admin\Module\AdminModuleMetadata;
 use Lemonade\Admin\Module\AdminNavigationGroup;
 use Lemonade\Admin\Module\Contract\AdminModuleDefinitionInterface;
 use Lemonade\Admin\Module\Contract\AdminModuleFileCapabilitiesInterface;
-use Lemonade\Admin\Modules\Definition\ModuleKind;
 use Lemonade\Admin\Modules\Manifest\ModuleManifestInterface;
 use Lemonade\Admin\Modules\Migration\ModuleMigrationManifestInterface;
 use Lemonade\Admin\Presentation\AdminFileCapabilities;
@@ -38,14 +37,6 @@ final readonly class ModuleManifest implements
     }
 
     /**
-     * Vrati optional lifecycle modulu
-     */
-    public function kind(): ModuleKind
-    {
-        return ModuleKind::Optional;
-    }
-
-    /**
      * Vrati prekladovy klic nazvu modulu
      */
     public function labelKey(): string
@@ -62,7 +53,7 @@ final readonly class ModuleManifest implements
     }
 
     /**
-     * Vrati migrace aplikovane pri instalaci modulu
+     * Vrati migrace aplikovane standardnim migration lifecycle
      *
      * @return list<class-string<MigrationInterface>>
      */
