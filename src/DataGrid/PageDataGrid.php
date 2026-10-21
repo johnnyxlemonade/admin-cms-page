@@ -57,7 +57,7 @@ final readonly class PageDataGrid implements DataGridProviderInterface
      */
     public function permission(): string
     {
-        return 'cms.page.view';
+        return 'cms.page.view_own';
     }
 
     /**
@@ -72,7 +72,10 @@ final readonly class PageDataGrid implements DataGridProviderInterface
                 new DataGridColumnDefinition('state', 'page.fields.publication_state', 'state'),
                 new DataGridColumnDefinition('template', 'page.fields.template'),
                 new DataGridColumnDefinition('sortOrder', 'page.fields.sort_order', 'sortOrder'),
+                new DataGridColumnDefinition('owner', 'page.fields.owner'),
+                new DataGridColumnDefinition('createdAt', 'page.fields.created_at'),
                 new DataGridColumnDefinition('updatedAt', 'page.fields.updated_at', 'updatedAt'),
+                new DataGridColumnDefinition('deletedAt', 'page.fields.deleted_at'),
                 new DataGridColumnDefinition('actions', 'admin.common.actions'),
             ],
             searchEnabled: true,
@@ -108,10 +111,19 @@ final readonly class PageDataGrid implements DataGridProviderInterface
      */
     public function execute(DataGridQuery $query): DataGridResult
     {
+        $canViewAll = $this->authorization->hasPermission('cms.page.view');
+        $ownerId = $canViewAll ? null : $this->authorization->currentUserId();
+        if (!$canViewAll && $ownerId === null) {
+            return new DataGridResult([], 1, $query->pageSize(), 0);
+        }
         $locale = $query->filter('locale') ?? $this->languages->defaultLocale();
-        $translations = $this->pages->translationsForLocale($locale);
-        $allRows = $this->pages->treeWithDeleted();
-        $rows = $this->filteredRows($allRows, $translations, $query);
+        $allRows = $this->pages->treeWithDeleted($ownerId);
+        $translations = $this->pages->translationsForLocale(
+            $locale,
+            array_map(static fn(array $row): int => (int) $row['id'], $allRows),
+        );
+        $filtered = $this->filteredRows($allRows, $translations, $query, $canViewAll, $ownerId);
+        $rows = $filtered['rows'];
         usort($rows, fn(array $left, array $right): int => $this->compare($left, $right, $translations, $query));
         $hierarchyRows = array_map(
             static fn(array $row): array => [
@@ -140,12 +152,11 @@ final readonly class PageDataGrid implements DataGridProviderInterface
                     $locale,
                     $siblingMoves[$id] ?? ['up' => false, 'down' => false],
                     $featuredImages[$id] ?? null,
+                    $canViewAll || (int) ($byId[$id]['owner_id'] ?? 0) === $ownerId,
                 );
             }
         }
-        $total = count($orderedRows);
-
-        return new DataGridResult($orderedRows, 1, $query->pageSize(), $total);
+        return new DataGridResult($orderedRows, 1, $query->pageSize(), $filtered['total']);
     }
 
     /**
@@ -153,12 +164,20 @@ final readonly class PageDataGrid implements DataGridProviderInterface
      *
      * @param list<array<string,mixed>> $rows
      * @param array<int,array<string,mixed>> $translations
-     * @return list<array<string,mixed>>
+     * @return array{rows:list<array<string,mixed>>,total:int}
      */
-    private function filteredRows(array $rows, array $translations, DataGridQuery $query): array
-    {
+    private function filteredRows(
+        array $rows,
+        array $translations,
+        DataGridQuery $query,
+        bool $canViewAll,
+        ?int $ownerId,
+    ): array {
         $matchingIds = [];
         foreach ($rows as $row) {
+            if (!$canViewAll && (int) ($row['owner_id'] ?? 0) !== $ownerId) {
+                continue;
+            }
             $deleted = $row['deleted_at'] !== null;
             if (($query->filter('status') === 'deleted') !== $deleted) {
                 continue;
@@ -204,16 +223,20 @@ final readonly class PageDataGrid implements DataGridProviderInterface
             $rows,
         );
         $hierarchy = new PageHierarchy($hierarchyRows);
+        $total = count($matchingIds);
         foreach (array_keys($matchingIds) as $pageId) {
             foreach ($hierarchy->ancestorIds($pageId) as $ancestorId) {
                 $matchingIds[$ancestorId] = true;
             }
         }
 
-        return array_values(array_filter(
-            $rows,
-            static fn(array $row): bool => isset($matchingIds[(int) $row['id']]),
-        ));
+        return [
+            'rows' => array_values(array_filter(
+                $rows,
+                static fn(array $row): bool => isset($matchingIds[(int) $row['id']]),
+            )),
+            'total' => $total,
+        ];
     }
 
     /**
@@ -268,10 +291,16 @@ final readonly class PageDataGrid implements DataGridProviderInterface
         string $locale,
         array $siblingMoves,
         ?array $featuredImage,
+        bool $accessible,
     ): DataGridRowDefinition {
         $pageId = (int) $page['id'];
         $deleted = $page['deleted_at'] !== null;
-        $editable = !$deleted && $this->authorization->hasPermission('cms.page.edit');
+        $ownerId = $page['owner_id'] === null ? null : (int) $page['owner_id'];
+        $editable = $accessible && !$deleted && $this->authorization->canForOwner(
+            'cms.page.edit',
+            'cms.page.edit_own',
+            $ownerId,
+        );
         $hasTranslation = $translation !== null;
         $title = trim((string) ($translation['title'] ?? ''));
         $title = $hasTranslation
@@ -321,7 +350,10 @@ final readonly class PageDataGrid implements DataGridProviderInterface
                     ),
                 'template' => new ScalarCell((string) $page['template_key']),
                 'sortOrder' => new ScalarCell((int) $page['sort_order']),
-                'updatedAt' => new ScalarCell((string) $page['updated_at']),
+                'owner' => new ScalarCell((string) ($page['owner_name'] ?? '—')),
+                'createdAt' => new ScalarCell($this->actorAndDate($page['created_by_name'] ?? null, $page['created_at'] ?? null)),
+                'updatedAt' => new ScalarCell($this->actorAndDate($page['updated_by_name'] ?? null, $page['updated_at'] ?? null)),
+                'deletedAt' => new ScalarCell($this->actorAndDate($page['deleted_by_name'] ?? null, $page['deleted_at'] ?? null)),
             ],
             actions: $this->rowActions(
                 $pageId,
@@ -329,6 +361,8 @@ final readonly class PageDataGrid implements DataGridProviderInterface
                 $locale,
                 $siblingMoves['up'],
                 $siblingMoves['down'],
+                $ownerId,
+                $accessible,
             ),
             tree: new DataGridTreeRowDefinition($page['parent_id'] === null ? null : (int) $page['parent_id']),
         );
@@ -345,9 +379,11 @@ final readonly class PageDataGrid implements DataGridProviderInterface
         string $locale,
         bool $canMoveUp,
         bool $canMoveDown,
+        ?int $ownerId,
+        bool $accessible,
     ): array {
         $actions = [];
-        if (!$deleted && $this->authorization->hasPermission('cms.page.edit')) {
+        if ($accessible && !$deleted && $this->authorization->canForOwner('cms.page.edit', 'cms.page.edit_own', $ownerId)) {
             $actions[] = (new DataGridRowActionDefinition(
                 key: 'edit',
                 label: $this->translator->get('admin.common.edit'),
@@ -355,7 +391,7 @@ final readonly class PageDataGrid implements DataGridProviderInterface
                 method: 'GET',
             ))->withIcon(AdminIcon::PencilSquare);
             foreach (['move-up' => $canMoveUp, 'move-down' => $canMoveDown] as $actionKey => $visible) {
-                if (!$visible) {
+                if (!$visible || !$this->authorization->hasPermission('cms.page.edit')) {
                     continue;
                 }
                 $move = $this->actionPresentation->rowAction('cms.page', $actionKey, $pageId);
@@ -364,13 +400,18 @@ final readonly class PageDataGrid implements DataGridProviderInterface
                 }
             }
         }
-        $lifecycle = $this->actionPresentation->rowAction(
-            'cms.page',
-            $deleted ? 'restore' : 'delete',
-            $pageId,
-        );
-        if ($lifecycle !== null) {
-            $actions[] = $lifecycle;
+        $canChangeLifecycle = $accessible && ($deleted
+            ? $this->authorization->canForOwner('cms.page.restore', 'cms.page.restore_own', $ownerId)
+            : $this->authorization->canForOwner('cms.page.delete', 'cms.page.delete_own', $ownerId));
+        if ($canChangeLifecycle) {
+            $lifecycle = $this->actionPresentation->rowAction(
+                'cms.page',
+                $deleted ? 'restore' : 'delete',
+                $pageId,
+            );
+            if ($lifecycle !== null) {
+                $actions[] = $lifecycle;
+            }
         }
 
         return $actions;
@@ -395,9 +436,22 @@ final readonly class PageDataGrid implements DataGridProviderInterface
     private function parentFilterOptions(): array
     {
         $locale = $this->languages->defaultLocale();
-        $rows = $this->pages->activeTree();
-        $translations = $this->pages->translationsForLocale($locale);
-        $hierarchy = new PageHierarchy($rows);
+        $rows = array_values(array_filter(
+            $this->visibleTreeRows(),
+            static fn(array $row): bool => $row['deleted_at'] === null,
+        ));
+        $translations = $this->pages->translationsForLocale(
+            $locale,
+            array_map(static fn(array $row): int => (int) $row['id'], $rows),
+        );
+        $hierarchy = new PageHierarchy(array_map(
+            static fn(array $row): array => [
+                'id' => (int) $row['id'],
+                'parent_id' => $row['parent_id'] === null ? null : (int) $row['parent_id'],
+                'sort_order' => (int) ($row['sort_order'] ?? 0),
+            ],
+            $rows,
+        ));
         $options = [new SelectOptionDefinition('root', $this->translator->get('page.editor.root'))];
         foreach ($hierarchy->preorder() as $pageId) {
             $title = trim((string) ($translations[$pageId]['title'] ?? ''));
@@ -411,6 +465,36 @@ final readonly class PageDataGrid implements DataGridProviderInterface
         }
 
         return $options;
+    }
+
+    /**
+     * Vrati vlastni stranky a nezbytne cizi predky bez per-row dotazu
+     *
+     * @return list<array<string,mixed>>
+     */
+    private function visibleTreeRows(): array
+    {
+        $ownerId = $this->authorization->hasPermission('cms.page.view')
+            ? null
+            : $this->authorization->currentUserId();
+
+        return $ownerId === null && !$this->authorization->hasPermission('cms.page.view')
+            ? []
+            : $this->pages->treeWithDeleted($ownerId);
+    }
+
+    /**
+     * Slozi auditni identitu a datum bez skryti chybejiciho uzivatele
+     */
+    private function actorAndDate(mixed $actor, mixed $date): string
+    {
+        if ($date === null || trim((string) $date) === '') {
+            return '—';
+        }
+
+        $actor = trim((string) $actor);
+
+        return ($actor === '' ? '—' : $actor) . ' · ' . (string) $date;
     }
 
     /**

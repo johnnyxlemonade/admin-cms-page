@@ -8,6 +8,7 @@ use Lemonade\Admin\Audit\AuditActor;
 use Lemonade\Admin\Audit\AuditLogService;
 use Lemonade\Admin\Event\DomainEventDispatcher;
 use Lemonade\Admin\Event\TransactionalEventProcessor;
+use Lemonade\Admin\Identity\LocalUserDirectory;
 use Lemonade\Admin\Localization\LanguageRegistry;
 use Lemonade\Cms\Page\Models\PageModel;
 use Lemonade\Cms\Page\Publication\PagePublicationPlanResolver;
@@ -64,6 +65,70 @@ final class PageLifecycleNoOpTest extends TestCase
         self::assertSame([], $state->auditWrites);
     }
 
+    public function testOwnerTransferWritesAggregateAndAuditOnlyForChangedOwner(): void
+    {
+        $state = new PageNoOpState(userExists: true);
+        $service = $this->service($state, [[['owner_id' => 3]]]);
+
+        $service->transferOwner(AuditActor::user(7), 42, 9);
+
+        self::assertSame(1, $state->transactions);
+        self::assertCount(1, $state->domainWrites);
+        self::assertStringNotContainsString('created_by', $state->domainWrites[0]);
+        self::assertCount(1, $state->auditWrites);
+        self::assertSame(
+            ['previous_owner_id' => 3, 'new_owner_id' => 9],
+            json_decode((string) $state->auditBindings[0][7], true, flags: JSON_THROW_ON_ERROR),
+        );
+    }
+
+    /**
+     * Preda osirelou stranku a zachova null v auditni historii puvodniho vlastnika
+     */
+    public function testOrphanOwnerTransferWritesNullPreviousOwnerToAudit(): void
+    {
+        $state = new PageNoOpState(userExists: true);
+        $service = $this->service($state, [[['owner_id' => null]]]);
+
+        $service->transferOwner(AuditActor::user(7), 42, 9);
+
+        self::assertCount(1, $state->domainWrites);
+        self::assertStringNotContainsString('created_by', $state->domainWrites[0]);
+        self::assertCount(1, $state->auditWrites);
+        self::assertSame(
+            ['previous_owner_id' => null, 'new_owner_id' => 9],
+            json_decode((string) $state->auditBindings[0][7], true, flags: JSON_THROW_ON_ERROR),
+        );
+    }
+
+    public function testOwnerTransferToCurrentOwnerIsAuditedNoOp(): void
+    {
+        $state = new PageNoOpState(userExists: true);
+        $service = $this->service($state, [[['owner_id' => 3]]]);
+
+        $service->transferOwner(AuditActor::user(7), 42, 3);
+
+        self::assertSame(1, $state->transactions);
+        self::assertSame([], $state->domainWrites);
+        self::assertSame([], $state->auditWrites);
+    }
+
+    public function testOwnerTransferRejectsMissingOrDeletedLocalUser(): void
+    {
+        $state = new PageNoOpState(userExists: false);
+        $service = $this->service($state, [[['owner_id' => 3]]]);
+
+        try {
+            $service->transferOwner(AuditActor::user(7), 42, 9);
+            self::fail('Missing owner must be rejected.');
+        } catch (\DomainException $exception) {
+            self::assertSame('page.validation.owner_invalid', $exception->getMessage());
+        }
+
+        self::assertSame([], $state->domainWrites);
+        self::assertSame([], $state->auditWrites);
+    }
+
     /**
      * @param list<list<array<string,mixed>>> $selectRows
      */
@@ -87,6 +152,7 @@ final class PageLifecycleNoOpTest extends TestCase
             $this->createMock(PageTemplateRendererInterface::class),
             new PageSubtreeRouteMapper(),
             new PagePublicationPlanResolver(),
+            new LocalUserDirectory($database),
         );
     }
 
@@ -108,11 +174,17 @@ final class PageLifecycleNoOpTest extends TestCase
             },
         );
         $connection->method('statement')->willReturnCallback(
-            static function (string $sql) use ($state): int {
+            static function (string $sql, array $bindings = []) use ($state): int {
                 $state->auditWrites[] = $sql;
+                $state->auditBindings[] = array_values($bindings);
 
                 return 1;
             },
+        );
+        $connection->method('select')->willReturnCallback(
+            static fn(string $sql): array => str_contains($sql, 'FROM system_user') && $state->userExists
+                ? [['1' => 1]]
+                : [],
         );
 
         return $connection;
@@ -126,6 +198,7 @@ final class PageLifecycleNoOpTest extends TestCase
         $results = array_map(function (array $rows): DatabaseResultInterface {
             $result = $this->createMock(DatabaseResultInterface::class);
             $result->method('result_array')->willReturn($rows);
+            $result->method('row_array')->willReturn($rows[0] ?? null);
 
             return $result;
         }, $selectRows);
@@ -172,9 +245,14 @@ final class PageNoOpState
 
     public int $transactions = 0;
 
+    public function __construct(public bool $userExists = false) {}
+
     /** @var list<string> */
     public array $domainWrites = [];
 
     /** @var list<string> */
     public array $auditWrites = [];
+
+    /** @var list<list<mixed>> */
+    public array $auditBindings = [];
 }

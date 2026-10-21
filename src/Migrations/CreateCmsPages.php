@@ -28,6 +28,10 @@ final readonly class CreateCmsPages implements MigrationInterface
     {
         $schema->create('cms_page', static function (TableBlueprint $table): void {
             $table->id()->comment('Stabilni identifikator stranky');
+            $table->unsignedBigInteger('created_by')->nullable()->comment('Puvodni lokalni tvurce stranky');
+            $table->unsignedBigInteger('updated_by')->nullable()->comment('Posledni lokalni uzivatel, ktery aggregate skutecne zmenil');
+            $table->unsignedBigInteger('deleted_by')->nullable()->comment('Lokalni uzivatel, ktery provedl aktualni soft delete');
+            $table->unsignedBigInteger('owner_id')->nullable()->comment('Aktualni vlastnik celeho page aggregate');
             $table->unsignedBigInteger('parent_id')->nullable()->comment('Volitelny rodic ve spolecne jazykove hierarchii');
             $table->unsignedInteger('sort_order')->default(0)->comment('Poradi mezi sourozenci');
             $table->string('template_key', 100)->comment('Hostem interpretovany klic sablony');
@@ -36,7 +40,12 @@ final readonly class CreateCmsPages implements MigrationInterface
             $table->index(['parent_id', 'sort_order', 'id'], 'idx_cms_page_parent_order');
             $table->index(['deleted_at'], 'idx_cms_page_deleted');
             $table->index(['template_key'], 'idx_cms_page_template');
+            $table->index(['owner_id', 'deleted_at'], 'idx_cms_page_owner_deleted');
             $table->foreign('parent_id', 'fk_cms_page_parent')->references('id')->on('cms_page')->restrictOnDelete()->restrictOnUpdate();
+            $table->foreign('created_by', 'fk_cms_page_created_by')->references('id')->on('system_user')->nullOnDelete()->restrictOnUpdate();
+            $table->foreign('updated_by', 'fk_cms_page_updated_by')->references('id')->on('system_user')->nullOnDelete()->restrictOnUpdate();
+            $table->foreign('deleted_by', 'fk_cms_page_deleted_by')->references('id')->on('system_user')->nullOnDelete()->restrictOnUpdate();
+            $table->foreign('owner_id', 'fk_cms_page_owner')->references('id')->on('system_user')->nullOnDelete()->restrictOnUpdate();
             $table->engine('InnoDB');
             $table->charset('utf8mb4');
         }, ifNotExists: true);

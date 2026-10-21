@@ -14,6 +14,7 @@ use Lemonade\Admin\Editor\AdminEditor\Rendering\AdminEditorRenderContext;
 use Lemonade\Admin\Editor\EditorLoaded;
 use Lemonade\Admin\Editor\Exception\EditorEntityNotFoundException;
 use Lemonade\Admin\Icon\AdminIcon;
+use Lemonade\Admin\Identity\LocalUserDirectory;
 use Lemonade\Admin\Localization\LanguageRegistry;
 use Lemonade\Admin\Module\AdminModuleRouteResolver;
 use Lemonade\Admin\Page\Contract\ModuleEditorPageProviderInterface;
@@ -47,6 +48,7 @@ final readonly class PageModulePageProvider implements ModuleIndexPageProviderIn
         private PageModel $pages,
         private PageTemplateRendererInterface $templates,
         private LanguageRegistry $languages,
+        private LocalUserDirectory $users,
     ) {}
 
     /**
@@ -54,7 +56,7 @@ final readonly class PageModulePageProvider implements ModuleIndexPageProviderIn
      */
     public function indexPermission(): string
     {
-        return 'cms.page.view';
+        return 'cms.page.view_own';
     }
 
     /**
@@ -137,6 +139,9 @@ final readonly class PageModulePageProvider implements ModuleIndexPageProviderIn
         $context = count($locales) > 1
             ? $this->localeContext($locales, $selected['code'], (int) $page['id'])
             : null;
+        $ownerId = $page['owner_id'] === null ? null : (int) $page['owner_id'];
+        $canAssignOwner = $this->authorization->hasPermission('cms.page.assign_owner')
+            && $this->authorization->canForOwner('cms.page.view', 'cms.page.view_own', $ownerId);
 
         return new ModulePage(
             view: 'admin::editor',
@@ -145,7 +150,13 @@ final readonly class PageModulePageProvider implements ModuleIndexPageProviderIn
                 'adminEditor' => $this->adminEditorDefinitions->create(
                     page: $page,
                     contentLocale: $selected['code'],
-                    canPublish: $this->authorization->hasPermission('cms.page.publish'),
+                    canPublish: $this->authorization->canForOwner(
+                        'cms.page.publish',
+                        'cms.page.publish_own',
+                        $ownerId,
+                    ),
+                    canAssignOwner: $canAssignOwner,
+                    ownerOptions: $canAssignOwner ? $this->ownerOptions() : [],
                     parentOptions: $this->parentOptions((int) $page['id']),
                     templateOptions: $this->templateOptions((string) ($page['template_key'] ?? '')),
                     context: $context,
@@ -183,6 +194,14 @@ final readonly class PageModulePageProvider implements ModuleIndexPageProviderIn
                         'template_key' => (string) ($page['template_key'] ?? ''),
                         'publication_state' => (string) ($translation['publication_state'] ?? 0),
                         'published_at' => (string) ($translation['published_at'] ?? ''),
+                        'created_by_name' => (string) ($page['created_by_name'] ?? '—'),
+                        'created_at' => (string) ($page['created_at'] ?? ''),
+                        'updated_by_name' => (string) ($page['updated_by_name'] ?? '—'),
+                        'updated_at' => (string) ($page['updated_at'] ?? ''),
+                        'owner_name' => (string) ($page['owner_name'] ?? '—'),
+                        'owner_id' => $ownerId === null ? '' : (string) $ownerId,
+                        'deleted_by_name' => (string) ($page['deleted_by_name'] ?? '—'),
+                        'deleted_at' => (string) ($page['deleted_at'] ?? ''),
                     ],
                     oldInput: $input,
                     errors: $errors,
@@ -193,6 +212,21 @@ final readonly class PageModulePageProvider implements ModuleIndexPageProviderIn
                 'locale' => $locale,
             ],
         );
+    }
+
+    /**
+     * Sestavi options nesmazanych lokalnich uzivatelu pro ownership transfer
+     *
+     * @return array<int,string>
+     */
+    private function ownerOptions(): array
+    {
+        $options = [];
+        foreach ($this->users->assignableUsers() as $user) {
+            $options[$user['id']] = $user['label'];
+        }
+
+        return $options;
     }
 
     /**

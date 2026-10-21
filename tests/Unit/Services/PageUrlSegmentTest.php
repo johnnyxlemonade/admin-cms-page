@@ -8,6 +8,7 @@ use Lemonade\Admin\Audit\AuditActor;
 use Lemonade\Admin\Audit\AuditLogService;
 use Lemonade\Admin\Event\DomainEventDispatcher;
 use Lemonade\Admin\Event\TransactionalEventProcessor;
+use Lemonade\Admin\Identity\LocalUserDirectory;
 use Lemonade\Admin\Localization\LanguageRegistry;
 use Lemonade\Cms\Page\Models\PageModel;
 use Lemonade\Cms\Page\Publication\PagePublicationPlanResolver;
@@ -58,6 +59,7 @@ final class PageUrlSegmentTest extends TestCase
         self::assertSame('section/contact', $state->path(8, 'en'));
         self::assertSame(1, $state->transactions);
         self::assertCount(4, $state->routeWrites);
+        self::assertCount(1, $state->domainWrites);
         self::assertCount(1, $state->auditWrites);
     }
 
@@ -80,6 +82,7 @@ final class PageUrlSegmentTest extends TestCase
 
         self::assertSame('sekce', $segment);
         self::assertSame([], $state->routeWrites);
+        self::assertSame([], $state->domainWrites);
         self::assertSame([], $state->auditWrites);
     }
 
@@ -118,6 +121,7 @@ final class PageUrlSegmentTest extends TestCase
             $this->createMock(PageTemplateRendererInterface::class),
             new PageSubtreeRouteMapper(),
             new PagePublicationPlanResolver(),
+            new LocalUserDirectory($database),
         );
     }
 
@@ -160,10 +164,12 @@ final class PageUrlSegmentTest extends TestCase
             static fn(string $identifier): string => $identifier,
         );
         $driver->method('query')->willReturnCallback(
-            static function (string $sql) use (&$results, $state): DatabaseResultInterface {
+            static function (string $sql) use (&$results, $state): DatabaseResultInterface|bool {
                 self::assertTrue($state->insideTransaction, 'Page hierarchy reads must stay inside the URL transaction.');
                 if (!str_starts_with(strtolower(ltrim($sql)), 'select')) {
-                    throw new \LogicException('Explicit Page URL action must not write through PageModel.');
+                    $state->domainWrites[] = $sql;
+
+                    return true;
                 }
                 $result = array_shift($results);
                 if (!$result instanceof DatabaseResultInterface) {
@@ -227,6 +233,9 @@ final class PageUrlState
 
     /** @var list<string> */
     public array $auditWrites = [];
+
+    /** @var list<string> */
+    public array $domainWrites = [];
 
     /** @param list<array{id:int,module_code:string,entity_id:int,locale:string,path:string}> $routes */
     public function __construct(public array $routes) {}

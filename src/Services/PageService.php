@@ -9,6 +9,7 @@ use Lemonade\Admin\Audit\AuditActor;
 use Lemonade\Admin\Event\DomainEvent;
 use Lemonade\Admin\Event\TransactionalEventCollector;
 use Lemonade\Admin\Event\TransactionalEventProcessor;
+use Lemonade\Admin\Identity\LocalUserDirectory;
 use Lemonade\Admin\Localization\LanguageRegistry;
 use Lemonade\Cms\CmsPublicationState;
 use Lemonade\Cms\Page\Hierarchy\PageHierarchy;
@@ -40,6 +41,7 @@ final readonly class PageService
         private PageTemplateRendererInterface $templates,
         private PageSubtreeRouteMapper $subtreeRoutes,
         private PagePublicationPlanResolver $publicationPlans,
+        private LocalUserDirectory $users,
     ) {}
 
     /**
@@ -55,8 +57,9 @@ final readonly class PageService
 
         return $this->events->execute(
             $actor,
-            function (TransactionalEventCollector $events) use ($locale, $template): int {
+            function (TransactionalEventCollector $events) use ($actor, $locale, $template): int {
                 $pageId = $this->pages->createDraft(
+                    userId: $this->actorUserId($actor),
                     locale: $locale,
                     templateKey: $template->key(),
                     now: date('Y-m-d H:i:s'),
@@ -143,6 +146,7 @@ final readonly class PageService
         $this->events->execute(
             $actor,
             function (TransactionalEventCollector $events) use (
+                $actor,
                 $pageId,
                 $parentId,
                 $templateKey,
@@ -216,6 +220,7 @@ final readonly class PageService
                         subtreeIds: $subtreeIds,
                     );
                 }
+                $this->pages->touchUpdatedBy($pageId, $this->actorUserId($actor), $now);
                 $events->record(new DomainEvent(
                     $existingTranslation === null ? 'cms.page.translation_created' : 'cms.page.updated',
                     'cms.page',
@@ -252,7 +257,7 @@ final readonly class PageService
 
         return $this->events->execute(
             $actor,
-            function (TransactionalEventCollector $events) use ($pageId, $locale, $segment): string {
+            function (TransactionalEventCollector $events) use ($actor, $pageId, $locale, $segment): string {
                 $treeRows = $this->pages->activeTreeForUpdate();
                 $tree = new PageHierarchy($treeRows);
                 $page = $this->treeRow($treeRows, $pageId);
@@ -275,6 +280,7 @@ final readonly class PageService
 
                     return $segment;
                 }
+                $this->pages->touchUpdatedBy($pageId, $this->actorUserId($actor), date('Y-m-d H:i:s'));
                 $events->record(new DomainEvent(
                     'cms.page.updated',
                     'cms.page',
@@ -302,7 +308,7 @@ final readonly class PageService
         }
         $this->events->execute(
             $actor,
-            function (TransactionalEventCollector $events) use ($pageId): void {
+            function (TransactionalEventCollector $events) use ($actor, $pageId): void {
                 $rows = $this->pages->activeTreeForUpdate();
                 $tree = new PageHierarchy($rows);
                 if (count($tree->descendantIds($pageId)) > 1) {
@@ -311,7 +317,7 @@ final readonly class PageService
                 $now = date('Y-m-d H:i:s');
                 $page = $this->treeRow($rows, $pageId);
                 $parentId = $page['parent_id'] === null ? null : (int) $page['parent_id'];
-                $this->pages->softDelete($pageId, $now);
+                $this->pages->softDelete($pageId, $this->actorUserId($actor), $now);
                 $remainingSiblings = array_values(array_filter(
                     $this->siblingIds($rows, $parentId),
                     static fn(int $siblingId): bool => $siblingId !== $pageId,
@@ -337,7 +343,7 @@ final readonly class PageService
         }
         $this->events->execute(
             $actor,
-            function (TransactionalEventCollector $events) use ($pageId): void {
+            function (TransactionalEventCollector $events) use ($actor, $pageId): void {
                 $page = $this->pages->lifecycleForUpdate($pageId);
                 if ($page === null) {
                     throw new DomainException('page.validation.not_found');
@@ -360,7 +366,7 @@ final readonly class PageService
                     throw new DomainException('page.validation.parent_invalid');
                 }
                 $now = date('Y-m-d H:i:s');
-                $this->pages->restoreDraft($pageId, $now);
+                $this->pages->restoreDraft($pageId, $this->actorUserId($actor), $now);
                 $siblings = $this->siblingIds($rows, $parentId);
                 $siblings[] = $pageId;
                 $this->pages->saveSiblingOrder($siblings, $now);
@@ -380,7 +386,7 @@ final readonly class PageService
         }
         $this->events->execute(
             $actor,
-            function (TransactionalEventCollector $events) use ($pageId, $direction): void {
+            function (TransactionalEventCollector $events) use ($actor, $pageId, $direction): void {
                 $rows = $this->pages->activeTreeForUpdate();
                 $page = $this->treeRow($rows, $pageId);
                 $parentId = $page['parent_id'] === null ? null : (int) $page['parent_id'];
@@ -396,8 +402,51 @@ final readonly class PageService
                     return;
                 }
                 [$siblings[$position], $siblings[$target]] = [$siblings[$target], $siblings[$position]];
-                $this->pages->saveSiblingOrder(array_values($siblings), date('Y-m-d H:i:s'));
+                $now = date('Y-m-d H:i:s');
+                $this->pages->saveSiblingOrder(array_values($siblings), $now);
+                $this->pages->touchUpdatedBy($pageId, $this->actorUserId($actor), $now);
                 $events->record(new DomainEvent('cms.page.reordered', 'cms.page', 'cms_page', (string) $pageId));
+            },
+        );
+    }
+
+    /**
+     * Preda vlastnictvi existujicimu lokalnimu uzivateli a zapise auditni rozdil
+     */
+    public function transferOwner(AuditActor $actor, int $pageId, int $newOwnerId): void
+    {
+        $this->events->execute(
+            $actor,
+            function (TransactionalEventCollector $events) use ($actor, $pageId, $newOwnerId): void {
+                $page = $this->pages->ownerForUpdate($pageId);
+                if ($page === null) {
+                    throw new DomainException('page.validation.not_found');
+                }
+                if (!$this->users->exists($newOwnerId)) {
+                    throw new DomainException('page.validation.owner_invalid');
+                }
+                $previousOwnerId = $page['owner_id'] === null ? null : (int) $page['owner_id'];
+                if ($previousOwnerId === $newOwnerId) {
+                    $events->noOp();
+
+                    return;
+                }
+                $this->pages->transferOwner(
+                    $pageId,
+                    $newOwnerId,
+                    $this->actorUserId($actor),
+                    date('Y-m-d H:i:s'),
+                );
+                $events->record(new DomainEvent(
+                    'cms.page.owner_transferred',
+                    'cms.page',
+                    'cms_page',
+                    (string) $pageId,
+                    [
+                        'previous_owner_id' => $previousOwnerId,
+                        'new_owner_id' => $newOwnerId,
+                    ],
+                ));
             },
         );
     }
@@ -734,5 +783,18 @@ final readonly class PageService
         }
 
         return true;
+    }
+
+    /**
+     * Vrati povinne lokalni ID auditniho aktora CMS mutace
+     */
+    private function actorUserId(AuditActor $actor): int
+    {
+        $userId = $actor->userId();
+        if ($userId === null) {
+            throw new RuntimeException('Page mutations require a local user actor.');
+        }
+
+        return $userId;
     }
 }

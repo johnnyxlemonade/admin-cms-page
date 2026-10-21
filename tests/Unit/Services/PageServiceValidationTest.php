@@ -7,6 +7,7 @@ namespace Lemonade\Cms\Page\Tests\Unit\Services;
 use DomainException;
 use Lemonade\Admin\Audit\AuditActor;
 use Lemonade\Admin\Event\TransactionalEventProcessor;
+use Lemonade\Admin\Identity\LocalUserDirectory;
 use Lemonade\Admin\Localization\LanguageRegistry;
 use Lemonade\Cms\Page\Models\PageModel;
 use Lemonade\Cms\Page\Publication\PagePublicationPlanResolver;
@@ -190,6 +191,7 @@ final class PageServiceValidationTest extends TestCase
             templates: new PageServiceTemplateRendererStub(),
             subtreeRoutes: new PageSubtreeRouteMapper(),
             publicationPlans: new PagePublicationPlanResolver(),
+            users: new LocalUserDirectory($database),
         );
     }
 

@@ -23,18 +23,28 @@ final class PageModel extends Model
     /**
      * @var list<string>
      */
-    protected array $allowedFields = ['parent_id', 'sort_order', 'template_key'];
+    protected array $allowedFields = [
+        'created_by',
+        'updated_by',
+        'deleted_by',
+        'owner_id',
+        'parent_id',
+        'sort_order',
+        'template_key',
+    ];
 
     /**
      * Vytvori minimalni root draft a jeho vychozi lokalizaci
      */
-    public function createDraft(string $locale, string $templateKey, string $now): int
+    public function createDraft(int $userId, string $locale, string $templateKey, string $now): int
     {
         $maximum = $this->query()
             ->selectRaw('COALESCE(MAX(sort_order), -1) AS maximum_order')
             ->where('parent_id', null)
             ->first();
         $pageId = (int) $this->insert([
+            'created_by' => $userId,
+            'owner_id' => $userId,
             'parent_id' => null,
             'sort_order' => ((int) ($maximum['maximum_order'] ?? -1)) + 1,
             'template_key' => $templateKey,
@@ -65,7 +75,14 @@ final class PageModel extends Model
     public function page(int $pageId): ?array
     {
         return $this->query()
-            ->select(['id', 'parent_id', 'sort_order', 'template_key', 'deleted_at'])
+            ->select([
+                'id', 'created_by', 'updated_by', 'deleted_by', 'owner_id',
+                'parent_id', 'sort_order', 'template_key', 'created_at', 'updated_at', 'deleted_at',
+            ])
+            ->selectRaw("COALESCE(NULLIF(TRIM(CONCAT_WS(' ', (SELECT first_name FROM system_user WHERE id = cms_page.created_by), (SELECT last_name FROM system_user WHERE id = cms_page.created_by))), ''), (SELECT email FROM system_user WHERE id = cms_page.created_by), '—') AS created_by_name")
+            ->selectRaw("COALESCE(NULLIF(TRIM(CONCAT_WS(' ', (SELECT first_name FROM system_user WHERE id = cms_page.updated_by), (SELECT last_name FROM system_user WHERE id = cms_page.updated_by))), ''), (SELECT email FROM system_user WHERE id = cms_page.updated_by), '—') AS updated_by_name")
+            ->selectRaw("COALESCE(NULLIF(TRIM(CONCAT_WS(' ', (SELECT first_name FROM system_user WHERE id = cms_page.deleted_by), (SELECT last_name FROM system_user WHERE id = cms_page.deleted_by))), ''), (SELECT email FROM system_user WHERE id = cms_page.deleted_by), '—') AS deleted_by_name")
+            ->selectRaw("COALESCE(NULLIF(TRIM(CONCAT_WS(' ', (SELECT first_name FROM system_user WHERE id = cms_page.owner_id), (SELECT last_name FROM system_user WHERE id = cms_page.owner_id))), ''), (SELECT email FROM system_user WHERE id = cms_page.owner_id), '—') AS owner_name")
             ->where('id', $pageId)
             ->first();
     }
@@ -79,7 +96,7 @@ final class PageModel extends Model
     {
         return $this->withDeleted()
             ->query()
-            ->select(['id', 'parent_id', 'deleted_at'])
+            ->select(['id', 'parent_id', 'owner_id', 'deleted_at'])
             ->where('id', $pageId)
             ->first();
     }
@@ -93,10 +110,45 @@ final class PageModel extends Model
     {
         return $this->withDeleted()
             ->query()
-            ->select(['id', 'parent_id', 'deleted_at'])
+            ->select(['id', 'parent_id', 'owner_id', 'deleted_at'])
             ->where('id', $pageId)
             ->lockForUpdate()
             ->first();
+    }
+
+    /**
+     * Vrati aktualniho vlastnika vcetne soft-delete stavu
+     */
+    public function ownerId(int $pageId): ?int
+    {
+        $page = $this->withDeleted()
+            ->query()
+            ->select(['owner_id'])
+            ->where('id', $pageId)
+            ->first();
+
+        return $page === null || $page['owner_id'] === null
+            ? null
+            : (int) $page['owner_id'];
+    }
+
+    /**
+     * Zamkne vlastnictvi stranky pro atomicke predani
+     *
+     * @return array{owner_id:int|null}|null
+     */
+    public function ownerForUpdate(int $pageId): ?array
+    {
+        $page = $this->withDeleted()
+            ->query()
+            ->select(['owner_id'])
+            ->where('id', $pageId)
+            ->lockForUpdate()
+            ->first();
+
+        return $page === null
+            ? null
+            : ['owner_id' => $page['owner_id'] === null ? null : (int) $page['owner_id']];
     }
 
     /**
@@ -228,25 +280,61 @@ final class PageModel extends Model
     /**
      * Soft-deleteuje jednu stranku
      */
-    public function softDelete(int $pageId, string $now): void
+    public function softDelete(int $pageId, int $userId, string $now): void
     {
-        $this->query()->where('id', $pageId)->set(['deleted_at' => $now, 'updated_at' => $now])->update();
+        $this->query()->where('id', $pageId)->set([
+            'deleted_at' => $now,
+            'deleted_by' => $userId,
+            'updated_by' => $userId,
+            'updated_at' => $now,
+        ])->update();
     }
 
     /**
      * Obnovi stranku a vsechny lokalizace jako draft
      */
-    public function restoreDraft(int $pageId, string $now): void
+    public function restoreDraft(int $pageId, int $userId, string $now): void
     {
         $this->withDeleted()->query()
             ->where('id', $pageId)
-            ->set(['deleted_at' => null, 'updated_at' => $now])
+            ->set([
+                'deleted_at' => null,
+                'deleted_by' => null,
+                'updated_by' => $userId,
+                'updated_at' => $now,
+            ])
             ->update();
         $this->translations()
             ->where('page_id', $pageId)
             ->set([
                 'publication_state' => CmsPublicationState::Draft->value,
                 'published_at' => null,
+                'updated_at' => $now,
+            ])
+            ->update();
+    }
+
+    /**
+     * Aktualizuje posledniho uzivatele pouze po skutecne zmene aggregate
+     */
+    public function touchUpdatedBy(int $pageId, int $userId, string $now): void
+    {
+        $this->withDeleted()->query()
+            ->where('id', $pageId)
+            ->set(['updated_by' => $userId, 'updated_at' => $now])
+            ->update();
+    }
+
+    /**
+     * Preda vlastnictvi stranky bez zmeny puvodniho tvurce
+     */
+    public function transferOwner(int $pageId, int $ownerId, int $userId, string $now): void
+    {
+        $this->withDeleted()->query()
+            ->where('id', $pageId)
+            ->set([
+                'owner_id' => $ownerId,
+                'updated_by' => $userId,
                 'updated_at' => $now,
             ])
             ->update();
@@ -263,7 +351,7 @@ final class PageModel extends Model
          * @var list<array{id:int,parent_id:int|null,sort_order:int,template_key:string,updated_at:string,deleted_at:mixed}> $rows
          */
         $rows = $this->query()
-            ->select(['id', 'parent_id', 'sort_order', 'template_key', 'updated_at', 'deleted_at'])
+            ->select(['id', 'owner_id', 'parent_id', 'sort_order', 'template_key', 'updated_at', 'deleted_at'])
             ->orderBy('sort_order', 'ASC')
             ->orderBy('id', 'ASC')
             ->getArray();
@@ -282,7 +370,7 @@ final class PageModel extends Model
          * @var list<array{id:int,parent_id:int|null,sort_order:int,template_key:string,updated_at:string,deleted_at:mixed}> $rows
          */
         $rows = $this->query()
-            ->select(['id', 'parent_id', 'sort_order', 'template_key', 'updated_at', 'deleted_at'])
+            ->select(['id', 'owner_id', 'parent_id', 'sort_order', 'template_key', 'updated_at', 'deleted_at'])
             ->orderBy('sort_order', 'ASC')
             ->orderBy('id', 'ASC')
             ->lockForUpdate()
@@ -296,22 +384,73 @@ final class PageModel extends Model
      *
      * @return list<array<string,mixed>>
      */
-    public function treeWithDeleted(): array
+    public function treeWithDeleted(?int $ownerId = null): array
+    {
+        $query = $this->treeWithDeletedQuery();
+        if ($ownerId === null) {
+            return $query->getArray();
+        }
+
+        $rows = $query->where('owner_id', $ownerId)->getArray();
+        $rowsById = [];
+        $pendingParentIds = [];
+        foreach ($rows as $row) {
+            $pageId = (int) $row['id'];
+            $rowsById[$pageId] = $row;
+            if ($row['parent_id'] !== null) {
+                $pendingParentIds[(int) $row['parent_id']] = true;
+            }
+        }
+        while ($pendingParentIds !== []) {
+            $parentIds = array_values(array_filter(
+                array_map('intval', array_keys($pendingParentIds)),
+                static fn(int $pageId): bool => !isset($rowsById[$pageId]),
+            ));
+            if ($parentIds === []) {
+                break;
+            }
+            $pendingParentIds = [];
+            foreach ($this->treeWithDeletedQuery()->whereIn('id', $parentIds)->getArray() as $row) {
+                $pageId = (int) $row['id'];
+                $rowsById[$pageId] = $row;
+                if ($row['parent_id'] !== null && !isset($rowsById[(int) $row['parent_id']])) {
+                    $pendingParentIds[(int) $row['parent_id']] = true;
+                }
+            }
+        }
+
+        return array_values($rowsById);
+    }
+
+    /**
+     * Sestavi jednotny dotaz na root metadata a auditni identity Pages
+     */
+    private function treeWithDeletedQuery(): QueryBuilder
     {
         return $this->withDeleted()->query()
-            ->select(['id', 'parent_id', 'sort_order', 'template_key', 'updated_at', 'deleted_at'])
-            ->getArray();
+            ->select([
+                'id', 'owner_id', 'created_by', 'updated_by', 'deleted_by',
+                'parent_id', 'sort_order', 'template_key', 'created_at', 'updated_at', 'deleted_at',
+            ])
+            ->selectRaw("COALESCE(NULLIF(TRIM(CONCAT_WS(' ', (SELECT first_name FROM system_user WHERE id = cms_page.created_by), (SELECT last_name FROM system_user WHERE id = cms_page.created_by))), ''), (SELECT email FROM system_user WHERE id = cms_page.created_by), '—') AS created_by_name")
+            ->selectRaw("COALESCE(NULLIF(TRIM(CONCAT_WS(' ', (SELECT first_name FROM system_user WHERE id = cms_page.updated_by), (SELECT last_name FROM system_user WHERE id = cms_page.updated_by))), ''), (SELECT email FROM system_user WHERE id = cms_page.updated_by), '—') AS updated_by_name")
+            ->selectRaw("COALESCE(NULLIF(TRIM(CONCAT_WS(' ', (SELECT first_name FROM system_user WHERE id = cms_page.deleted_by), (SELECT last_name FROM system_user WHERE id = cms_page.deleted_by))), ''), (SELECT email FROM system_user WHERE id = cms_page.deleted_by), '—') AS deleted_by_name")
+            ->selectRaw("COALESCE(NULLIF(TRIM(CONCAT_WS(' ', (SELECT first_name FROM system_user WHERE id = cms_page.owner_id), (SELECT last_name FROM system_user WHERE id = cms_page.owner_id))), ''), (SELECT email FROM system_user WHERE id = cms_page.owner_id), '—') AS owner_name");
     }
 
     /**
      * Vrati preklady a canonical cesty pro DataGrid ve zvolenem locale
      *
+     * @param list<int>|null $pageIds
      * @return array<int,array<string,mixed>>
      */
-    public function translationsForLocale(string $locale): array
+    public function translationsForLocale(string $locale, ?array $pageIds = null): array
     {
+        if ($pageIds === []) {
+            return [];
+        }
         $result = [];
-        foreach ($this->translations()
+        $query = $this->translations()
             ->from('cms_page_translation translation')
             ->select([
                 'translation.page_id', 'translation.title', 'translation.publication_state',
@@ -323,8 +462,11 @@ final class PageModel extends Model
                 "route.module_code = 'cms.page' AND route.entity_id = translation.page_id AND route.locale = translation.locale",
                 'LEFT',
             )
-            ->where('translation.locale', $locale)
-            ->getArray() as $row) {
+            ->where('translation.locale', $locale);
+        if ($pageIds !== null) {
+            $query->whereIn('translation.page_id', array_values($pageIds));
+        }
+        foreach ($query->getArray() as $row) {
             $result[(int) $row['page_id']] = $row;
         }
 

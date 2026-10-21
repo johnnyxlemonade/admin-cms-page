@@ -46,7 +46,7 @@ final readonly class PageActionRegistrar
             moduleCode: $moduleCode,
             definition: new ModuleActionDefinition(
                 key: 'save',
-                permission: 'cms.page.edit',
+                permission: 'cms.page.edit_own',
                 labelKey: 'admin.common.save',
             ),
             handlerServiceId: self::SAVE_HANDLER,
@@ -55,7 +55,7 @@ final readonly class PageActionRegistrar
             moduleCode: $moduleCode,
             definition: new ModuleActionDefinition(
                 key: 'change-url',
-                permission: 'cms.page.edit',
+                permission: 'cms.page.edit_own',
                 labelKey: 'admin.url_segment.save',
             ),
             handlerServiceId: PageChangeUrlAction::class,
@@ -84,7 +84,7 @@ final readonly class PageActionRegistrar
             moduleCode: $moduleCode,
             definition: new ModuleActionDefinition(
                 key: 'delete',
-                permission: 'cms.page.delete',
+                permission: 'cms.page.delete_own',
                 labelKey: 'page.actions.delete',
                 confirmation: new ConfirmationDefinition('page.confirm.delete'),
                 refreshGrid: true,
@@ -95,12 +95,21 @@ final readonly class PageActionRegistrar
             moduleCode: $moduleCode,
             definition: new ModuleActionDefinition(
                 key: 'restore',
-                permission: 'cms.page.restore',
+                permission: 'cms.page.restore_own',
                 labelKey: 'page.actions.restore',
                 confirmation: new ConfirmationDefinition('page.confirm.restore'),
                 refreshGrid: true,
             ),
             handlerServiceId: PageRestoreAction::class,
+        );
+        $this->actions->register(
+            moduleCode: $moduleCode,
+            definition: new ModuleActionDefinition(
+                key: 'assign-owner',
+                permission: 'cms.page.assign_owner',
+                labelKey: 'page.actions.assign_owner',
+            ),
+            handlerServiceId: PageAssignOwnerAction::class,
         );
     }
 }

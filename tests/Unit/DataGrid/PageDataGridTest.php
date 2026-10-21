@@ -6,6 +6,7 @@ namespace Lemonade\Cms\Page\Tests\Unit\DataGrid;
 
 use Lemonade\Admin\Action\ModuleActionRegistry;
 use Lemonade\Admin\Action\Presentation\ModuleActionPresentationFactory;
+use Lemonade\Admin\Auth\AuthenticatedUser;
 use Lemonade\Admin\Authorization\AuthorizationService;
 use Lemonade\Admin\Authorization\CurrentPrincipalProviderInterface;
 use Lemonade\Admin\DataGrid\DataGridRowDefinition;
@@ -20,6 +21,7 @@ use Lemonade\Cms\CmsPublicationState;
 use Lemonade\Cms\Page\Actions\PageActionRegistrar;
 use Lemonade\Cms\Page\DataGrid\PageDataGrid;
 use Lemonade\Cms\Page\Models\PageModel;
+use Lemonade\Cms\Page\ModuleManifest;
 use Lemonade\Framework\Cache\CacheManager;
 use Lemonade\Framework\Cache\Store\ArrayCacheItemPool;
 use Lemonade\Framework\Database\Connection\ConnectionInterface;
@@ -63,19 +65,20 @@ final class PageDataGridTest extends TestCase
     {
         $grid = $this->grid([
             [[
-                'page_id' => 7,
-                'title' => 'Kontakt',
-                'publication_state' => 1,
-                'published_at' => null,
-                'canonical_path' => 'kontakt',
-            ]],
-            [[
                 'id' => 7,
+                'owner_id' => 0,
                 'parent_id' => null,
                 'sort_order' => 0,
                 'template_key' => 'content',
                 'updated_at' => '2026-10-19 10:00:00',
                 'deleted_at' => null,
+            ]],
+            [[
+                'page_id' => 7,
+                'title' => 'Kontakt',
+                'publication_state' => 1,
+                'published_at' => null,
+                'canonical_path' => 'kontakt',
             ]],
             [[
                 'id' => 31,
@@ -119,8 +122,8 @@ final class PageDataGridTest extends TestCase
     public function testMissingLocaleTranslationIsNotPresentedAsNewRecord(): void
     {
         $grid = $this->grid([
-            [],
             [$this->pageRow(7)],
+            [],
         ]);
 
         $result = $grid->execute($this->query(locale: 'en'));
@@ -135,8 +138,8 @@ final class PageDataGridTest extends TestCase
     public function testExistingEmptyTranslationUsesSharedPlaceholderAndPersistedState(): void
     {
         $grid = $this->grid([
-            [$this->translationRow(7, null, CmsPublicationState::New)],
             [$this->pageRow(7)],
+            [$this->translationRow(7, null, CmsPublicationState::New)],
             [],
         ]);
 
@@ -153,12 +156,12 @@ final class PageDataGridTest extends TestCase
     {
         $grid = $this->grid([
             [
-                $this->translationRow(7, 'Draft', CmsPublicationState::Draft),
-                $this->translationRow(8, 'Published', CmsPublicationState::Published),
-            ],
-            [
                 $this->pageRow(7, sortOrder: 0),
                 $this->pageRow(8, sortOrder: 1),
+            ],
+            [
+                $this->translationRow(7, 'Draft', CmsPublicationState::Draft),
+                $this->translationRow(8, 'Published', CmsPublicationState::Published),
             ],
             [],
         ]);
@@ -178,19 +181,21 @@ final class PageDataGridTest extends TestCase
     public function testMissingAncestorTranslationIsMarkedAsStructuralContext(): void
     {
         $grid = $this->grid([
-            [$this->translationRow(8, 'Child', CmsPublicationState::Draft)],
             [
                 $this->pageRow(7, sortOrder: 0),
                 $this->pageRow(8, parentId: 7, sortOrder: 0),
             ],
+            [$this->translationRow(8, 'Child', CmsPublicationState::Draft)],
             [],
         ]);
 
+        $result = $grid->execute($this->query(locale: 'en'));
         $rows = array_map(
             static fn(DataGridRowDefinition $row): array => $row->toArray(),
-            $grid->execute($this->query(locale: 'en'))->items(),
+            $result->items(),
         );
 
+        self::assertSame(1, $result->total());
         self::assertSame('page.list.structural_context', $this->cellValue($rows[0], 'title'));
         self::assertSame('page.list.structural_context_state', $this->cellValue($rows[0], 'state'));
         self::assertSame('Child', $this->cellValue($rows[1], 'title'));
@@ -205,8 +210,8 @@ final class PageDataGridTest extends TestCase
     public function testExistingTranslationRemainsVisibleForExplicitDisabledLocale(): void
     {
         $grid = $this->grid([
-            [$this->translationRow(7, 'Archiv', CmsPublicationState::Draft)],
             [$this->pageRow(7)],
+            [$this->translationRow(7, 'Archiv', CmsPublicationState::Draft)],
             [],
         ]);
 
@@ -247,11 +252,79 @@ final class PageDataGridTest extends TestCase
     }
 
     /**
+     * Own-only strom filtruje root zaznamy v SQL a cizi predky nacita davkove
+     */
+    public function testOwnershipTreeScopeLoadsOnlyOwnedRootsAndRequiredAncestors(): void
+    {
+        $queries = [];
+        $rows = [
+            [$this->pageRow(8, parentId: 7, ownerId: 42)],
+            [$this->pageRow(7, ownerId: 9)],
+        ];
+        $driver = $this->createMock(DatabaseDriverInterface::class);
+        $driver->method('protect_identifiers')->willReturnCallback(
+            static fn(string $identifier): string => $identifier,
+        );
+        $driver->method('query')->willReturnCallback(
+            function (string $sql) use (&$queries, &$rows): DatabaseResultInterface {
+                $queries[] = $sql;
+                $resultRows = array_shift($rows);
+                self::assertIsArray($resultRows);
+                $result = $this->createMock(DatabaseResultInterface::class);
+                $result->method('result_array')->willReturn($resultRows);
+
+                return $result;
+            },
+        );
+
+        $tree = (new PageModel($driver))->treeWithDeleted(42);
+
+        self::assertSame([8, 7], array_map(static fn(array $row): int => (int) $row['id'], $tree));
+        self::assertCount(2, $queries);
+        self::assertStringContainsString('owner_id = ?', $queries[0]);
+        self::assertStringContainsString('id IN (?)', $queries[1]);
+        self::assertStringNotContainsString('owner_id = ?', $queries[1]);
+    }
+
+    /**
+     * Cizi predek vlastni stranky zustava pouze neinteraktivnim kontextem
+     */
+    public function testForeignAncestorHasNoUrlOrRowActions(): void
+    {
+        $grid = $this->grid([
+            [$this->pageRow(8, parentId: 7, ownerId: 0)],
+            [$this->pageRow(7, ownerId: 9)],
+            [
+                $this->translationRow(7, 'Foreign parent', CmsPublicationState::Draft),
+                $this->translationRow(8, 'Owned child', CmsPublicationState::Draft),
+            ],
+            [],
+        ], ['cms.page.view_own', 'cms.page.edit_own']);
+
+        $result = $grid->execute($this->query(locale: 'en'));
+        $rows = array_map(
+            static fn(DataGridRowDefinition $row): array => $row->toArray(),
+            $result->items(),
+        );
+        $parentTitle = $rows[0]['cells']['title'][0] ?? null;
+        $childTitle = $rows[1]['cells']['title'][0] ?? null;
+
+        self::assertSame(1, $result->total());
+        self::assertIsArray($parentTitle);
+        self::assertNull($parentTitle['url'] ?? null);
+        self::assertSame([], $rows[0]['actions']);
+        self::assertIsArray($childTitle);
+        self::assertIsString($childTitle['url'] ?? null);
+        self::assertSame('edit', $rows[1]['actions'][0]['key']);
+    }
+
+    /**
      * Vytvori grid nad predanymi DB-free vysledky dotazu
      *
      * @param list<list<array<string,mixed>>> $queryRows
+     * @param list<string> $permissions
      */
-    private function grid(array $queryRows): PageDataGrid
+    private function grid(array $queryRows, array $permissions = []): PageDataGrid
     {
         $results = [];
         foreach ($queryRows as $rows) {
@@ -274,23 +347,39 @@ final class PageDataGridTest extends TestCase
             },
         );
         $connection = $this->createMock(ConnectionInterface::class);
+        $connection->method('select')->willReturnCallback(
+            static function (string $sql) use ($permissions): array {
+                if (!str_contains($sql, 'system_role_permission')) {
+                    return [];
+                }
+
+                return array_map(
+                    static fn(string $code): array => ['code' => $code, 'name_key' => $code, 'module_code' => 'cms.page'],
+                    $permissions,
+                );
+            },
+        );
         $database = new Database($connection, $driver);
         $languages = new LanguageRegistry(
             $database,
             new CacheManager(new ArrayCacheItemPool()),
         );
-        $authorization = new AuthorizationService(
-            $this->createMock(CurrentPrincipalProviderInterface::class),
-            $database,
-        );
+        $principal = $this->createMock(CurrentPrincipalProviderInterface::class);
+        $principal->method('currentUser')->willReturn(new AuthenticatedUser(0, 'fixture@example.test'));
+        $authorization = new AuthorizationService($principal, $database);
         $translator = $this->createMock(TranslatorInterface::class);
         $translator->method('get')->willReturnCallback(
             static fn(string $key): string => $key,
         );
-        $routes = new AdminModuleRouteResolver(
-            new AdminModuleRegistry(new AdminNavigationGroupRegistry()),
-        );
+        $moduleRegistry = new AdminModuleRegistry(new AdminNavigationGroupRegistry());
+        $moduleRegistry->register(new ModuleManifest());
+        $routes = new AdminModuleRouteResolver($moduleRegistry);
         $router = new Router();
+        $router->getNamed(
+            'admin.content.module.edit',
+            '/admin/content/{module}/{id}/edit',
+            ControllerAction::for('TestController', 'edit'),
+        );
         $router->getNamed(
             'api.image.show',
             '/api/image/{module}/{variant}/{image}',
@@ -369,9 +458,11 @@ final class PageDataGridTest extends TestCase
         int $pageId,
         ?int $parentId = null,
         int $sortOrder = 0,
+        int $ownerId = 0,
     ): array {
         return [
             'id' => $pageId,
+            'owner_id' => $ownerId,
             'parent_id' => $parentId,
             'sort_order' => $sortOrder,
             'template_key' => 'content',

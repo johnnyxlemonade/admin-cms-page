@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace Lemonade\Cms\Page\Editor;
 
 use DomainException;
+use Lemonade\Admin\Authorization\AuthorizationService;
+use Lemonade\Admin\Editor\Contract\EditorAccessPolicyInterface;
+use Lemonade\Admin\Editor\Contract\EditorFieldAccessPolicyInterface;
 use Lemonade\Admin\Editor\Contract\EditorProviderInterface;
 use Lemonade\Admin\Editor\EditorDefinition;
 use Lemonade\Admin\Editor\EditorFieldDefinition;
@@ -22,7 +25,10 @@ use Lemonade\Framework\Validation\ValidationSchema;
 /**
  * Propojuje CMS Page full-page editor s domenovymi mutacemi
  */
-final readonly class PageEditor implements EditorProviderInterface
+final readonly class PageEditor implements
+    EditorProviderInterface,
+    EditorAccessPolicyInterface,
+    EditorFieldAccessPolicyInterface
 {
     /**
      * Nastavuje Pages persistence, mutation service, content locales a auditni identitu editoru
@@ -35,6 +41,7 @@ final readonly class PageEditor implements EditorProviderInterface
         private PageEditorValidationSchema $validation,
         private AdminModuleRouteResolver $routes,
         private UrlGenerator $urls,
+        private AuthorizationService $authorization,
     ) {}
 
     /**
@@ -43,8 +50,8 @@ final readonly class PageEditor implements EditorProviderInterface
     public function editorDefinition(): EditorDefinition
     {
         return new EditorDefinition(
-            loadPermission: 'cms.page.view',
-            savePermission: 'cms.page.edit',
+            loadPermission: 'cms.page.view_own',
+            savePermission: 'cms.page.edit_own',
             createPermission: 'cms.page.create',
             fields: [
                 new EditorFieldDefinition(name: 'locale', type: 'text', readOnly: false, permission: null),
@@ -54,9 +61,49 @@ final readonly class PageEditor implements EditorProviderInterface
                 new EditorFieldDefinition(name: 'meta_description', type: 'text', readOnly: false, permission: null),
                 new EditorFieldDefinition(name: 'parent_id', type: 'text', readOnly: false, permission: null),
                 new EditorFieldDefinition(name: 'template_key', type: 'text', readOnly: false, permission: null),
-                new EditorFieldDefinition(name: 'publication_state', type: 'text', readOnly: false, permission: 'cms.page.publish'),
-                new EditorFieldDefinition(name: 'published_at', type: 'text', readOnly: false, permission: 'cms.page.publish'),
+                new EditorFieldDefinition(name: 'publication_state', type: 'text', readOnly: false, permission: 'cms.page.publish_own'),
+                new EditorFieldDefinition(name: 'published_at', type: 'text', readOnly: false, permission: 'cms.page.publish_own'),
             ],
+        );
+    }
+
+    /**
+     * Overi globalni nebo vlastnicky pristup ke cteni stranky
+     */
+    public function loadAccessDecision(int $id): bool
+    {
+        return $this->authorization->canForOwner(
+            'cms.page.view',
+            'cms.page.view_own',
+            $this->pages->ownerId($id),
+        );
+    }
+
+    /**
+     * Overi globalni nebo vlastnicky pristup k beznemu ulozeni stranky
+     */
+    public function saveAccessDecision(int $id): bool
+    {
+        return $this->authorization->canForOwner(
+            'cms.page.edit',
+            'cms.page.edit_own',
+            $this->pages->ownerId($id),
+        );
+    }
+
+    /**
+     * Overi publish pole proti vlastnikovi root stranky
+     */
+    public function fieldAccessDecision(int $id, string $field): ?bool
+    {
+        if (!in_array($field, ['publication_state', 'published_at'], true)) {
+            return null;
+        }
+
+        return $this->authorization->canForOwner(
+            'cms.page.publish',
+            'cms.page.publish_own',
+            $this->pages->ownerId($id),
         );
     }
 

@@ -41,6 +41,7 @@ final readonly class PageAdminEditorDefinitionFactory
      * @param array<string,mixed> $page
      * @param array<string,string> $parentOptions
      * @param array<string,string> $templateOptions
+     * @param array<int,string> $ownerOptions
      */
     public function create(
         array $page,
@@ -48,6 +49,8 @@ final readonly class PageAdminEditorDefinitionFactory
         bool $canPublish,
         array $parentOptions,
         array $templateOptions,
+        bool $canAssignOwner = false,
+        array $ownerOptions = [],
         ?AdminEditorHeaderContextDefinition $context = null,
         ?AdminFileUploadCollection $featuredImageUpload = null,
         ?AdminFileUploadCollection $galleryUpload = null,
@@ -80,7 +83,10 @@ final readonly class PageAdminEditorDefinitionFactory
             ->tab($this->mediaTab('attachments', 'admin.file_upload.attachments', 'admin.file_upload.attachments', $attachmentUpload));
 
         $sidebarSections = $this->sidebarSections(
+            page: $page,
             canPublish: $canPublish,
+            canAssignOwner: $canAssignOwner,
+            ownerOptions: $ownerOptions,
             featuredImageUpload: $featuredImageUpload,
         );
         if ($sidebarSections !== []) {
@@ -304,10 +310,15 @@ final readonly class PageAdminEditorDefinitionFactory
     /**
      * Sestavi publikacni panel a shared upload nahledoveho obrazku
      *
+     * @param array<string,mixed> $page
+     * @param array<int,string> $ownerOptions
      * @return list<SectionBlock>
      */
     private function sidebarSections(
+        array $page,
         bool $canPublish,
+        bool $canAssignOwner,
+        array $ownerOptions,
         ?AdminFileUploadCollection $featuredImageUpload,
     ): array {
         $sections = [];
@@ -336,6 +347,33 @@ final readonly class PageAdminEditorDefinitionFactory
                 titleKey: 'page.editor.publication',
             );
         }
+        $ownershipFields = [
+            new FieldColumn(Field::readonlyDisplay('created_by_name', labelKey: 'page.fields.created_by'), md: 12),
+            new FieldColumn(Field::readonlyDisplay('created_at', labelKey: 'page.fields.created_at'), md: 12),
+            new FieldColumn(Field::readonlyDisplay('updated_by_name', labelKey: 'page.fields.updated_by'), md: 12),
+            new FieldColumn(Field::readonlyDisplay('updated_at', labelKey: 'page.fields.updated_at'), md: 12),
+        ];
+        $ownershipFields[] = new FieldColumn(
+            $canAssignOwner
+                ? Field::actionSelect(
+                    name: 'owner_id',
+                    actionKey: 'assign-owner',
+                    labelKey: 'page.fields.owner',
+                    actionLabelKey: 'page.actions.assign_owner',
+                )->options($ownerOptions)
+                : Field::readonlyDisplay('owner_name', labelKey: 'page.fields.owner'),
+            md: 12,
+        );
+        if (($page['deleted_at'] ?? null) !== null) {
+            $ownershipFields[] = new FieldColumn(Field::readonlyDisplay('deleted_by_name', labelKey: 'page.fields.deleted_by'), md: 12);
+            $ownershipFields[] = new FieldColumn(Field::readonlyDisplay('deleted_at', labelKey: 'page.fields.deleted_at'), md: 12);
+        }
+        $sections[] = new SectionBlock(
+            id: 'ownership',
+            blocks: [new FieldGroupBlock($ownershipFields)],
+            title: '',
+            titleKey: 'page.editor.ownership',
+        );
         if ($featuredImageUpload !== null) {
             $sections[] = new SectionBlock(
                 id: 'thumbnail',

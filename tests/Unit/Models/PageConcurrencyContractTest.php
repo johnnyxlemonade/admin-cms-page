@@ -16,6 +16,37 @@ use PHPUnit\Framework\TestCase;
 final class PageConcurrencyContractTest extends TestCase
 {
     /**
+     * Novy root uklada stejneho lokalniho uzivatele jako tvurce i vlastnika
+     */
+    public function testCreateDraftPersistsCreatorAndOwnerOnRoot(): void
+    {
+        $queries = [];
+        $bindings = [];
+        $maximum = $this->createMock(DatabaseResultInterface::class);
+        $maximum->method('row_array')->willReturn(['maximum_order' => -1]);
+        $driver = $this->createMock(DatabaseDriverInterface::class);
+        $driver->method('protect_identifiers')->willReturnCallback(
+            static fn(string $identifier): string => $identifier,
+        );
+        $driver->method('query')->willReturnCallback(
+            static function (string $sql, array|false $queryBindings = []) use (&$queries, &$bindings, $maximum): DatabaseResultInterface|bool {
+                $queries[] = $sql;
+                $bindings[] = $queryBindings === false ? [] : array_values($queryBindings);
+
+                return str_starts_with($sql, 'SELECT') ? $maximum : true;
+            },
+        );
+        $driver->method('insert_id')->willReturn(12);
+
+        $pageId = (new PageModel($driver))->createDraft(7, 'cs', 'content', '2026-10-21 10:00:00');
+
+        self::assertSame(12, $pageId);
+        self::assertStringContainsString('created_by', $queries[1]);
+        self::assertStringContainsString('owner_id', $queries[1]);
+        self::assertSame([7, 7], array_slice($bindings[1], 0, 2));
+    }
+
+    /**
      * Aggregate root i existujici mutace se ctou pres write lock
      */
     public function testTreeAndTranslationReadsUseWriteLocks(): void

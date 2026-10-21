@@ -46,6 +46,14 @@ final class CreateCmsPagesTest extends TestCase
 
         self::assertSame(['cms_page', 'cms_page_translation'], array_keys($statements));
         self::assertStringContainsString('`parent_id` BIGINT UNSIGNED NULL', $statements['cms_page']);
+        foreach (['created_by', 'updated_by', 'deleted_by', 'owner_id'] as $column) {
+            self::assertStringContainsString(sprintf('`%s` BIGINT UNSIGNED NULL', $column), $statements['cms_page']);
+        }
+        foreach (['created_by', 'updated_by', 'deleted_by', 'owner'] as $suffix) {
+            self::assertStringContainsString('CONSTRAINT `fk_cms_page_' . $suffix . '`', $statements['cms_page']);
+        }
+        self::assertSame(4, substr_count($statements['cms_page'], 'ON UPDATE RESTRICT ON DELETE SET NULL'));
+        self::assertStringContainsString('KEY `idx_cms_page_owner_deleted` (`owner_id`, `deleted_at`)', $statements['cms_page']);
         self::assertStringContainsString('`sort_order` INT UNSIGNED NOT NULL DEFAULT 0', $statements['cms_page']);
         self::assertStringContainsString('`template_key` VARCHAR(100) NOT NULL', $statements['cms_page']);
         self::assertStringContainsString('CONSTRAINT `fk_cms_page_parent` FOREIGN KEY (`parent_id`)', $statements['cms_page']);

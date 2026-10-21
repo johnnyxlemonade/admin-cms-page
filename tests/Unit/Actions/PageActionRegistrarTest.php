@@ -21,11 +21,11 @@ final class PageActionRegistrarTest extends TestCase
         $actions = new ModuleActionRegistry();
         (new PageActionRegistrar($actions))->register();
 
-        foreach (['create', 'save', 'change-url', 'move-up', 'move-down', 'delete', 'restore'] as $key) {
+        foreach (['create', 'save', 'change-url', 'move-up', 'move-down', 'delete', 'restore', 'assign-owner'] as $key) {
             self::assertTrue($actions->has('cms.page', $key));
         }
         self::assertSame(
-            'cms.page.edit',
+            'cms.page.edit_own',
             $actions->action('cms.page', 'change-url')['definition']->permission(),
         );
         self::assertSame(

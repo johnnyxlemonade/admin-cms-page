@@ -5,19 +5,22 @@ declare(strict_types=1);
 namespace Lemonade\Cms\Page\Actions;
 
 use DomainException;
+use Lemonade\Admin\Action\Contract\ModuleActionAccessPolicyInterface;
 use Lemonade\Admin\Action\Contract\ModuleActionHandlerInterface;
 use Lemonade\Admin\Action\Exception\ModuleActionException;
 use Lemonade\Admin\Action\ModuleActionResult;
+use Lemonade\Admin\Authorization\AuthorizationService;
 use Lemonade\Admin\Http\AdminErrorCode;
 use Lemonade\Admin\Identity\LocalActorGuard;
 use Lemonade\Admin\Identity\LocalActorRequiredException;
+use Lemonade\Cms\Page\Models\PageModel;
 use Lemonade\Cms\Page\Services\PageService;
 use Lemonade\Framework\Http\HttpStatus;
 
 /**
  * Prevadi soft delete stranky na canonical Admin action response
  */
-final readonly class PageDeleteAction implements ModuleActionHandlerInterface
+final readonly class PageDeleteAction implements ModuleActionHandlerInterface, ModuleActionAccessPolicyInterface
 {
     /**
      * Nastavuje lifecycle service a canonical actor guard
@@ -25,7 +28,21 @@ final readonly class PageDeleteAction implements ModuleActionHandlerInterface
     public function __construct(
         private PageService $pages,
         private LocalActorGuard $actors,
+        private PageModel $model,
+        private AuthorizationService $authorization,
     ) {}
+
+    /**
+     * Overi soft delete globalnim nebo vlastnickym opravnenim
+     */
+    public function accessDecision(?int $id): bool
+    {
+        return $id !== null && $this->authorization->canForOwner(
+            'cms.page.delete',
+            'cms.page.delete_own',
+            $this->model->ownerId($id),
+        );
+    }
 
     /**
      * Soft-deleteuje existujici stranku
