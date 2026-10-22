@@ -176,6 +176,86 @@ final class PageDataGridTest extends TestCase
     }
 
     /**
+     * Grid vzdy zachova canonical preorder podle poradi sourozencu
+     */
+    public function testRowsFollowCanonicalSiblingPreorder(): void
+    {
+        $grid = $this->grid([
+            [
+                $this->pageRow(4, parentId: 1, sortOrder: 1),
+                $this->pageRow(2, sortOrder: 1),
+                $this->pageRow(3, parentId: 1, sortOrder: 0),
+                $this->pageRow(1, sortOrder: 0),
+            ],
+            [
+                $this->translationRow(1, 'Z root', CmsPublicationState::Draft),
+                $this->translationRow(2, 'A root', CmsPublicationState::Draft),
+                $this->translationRow(3, 'Z child', CmsPublicationState::Draft),
+                $this->translationRow(4, 'A child', CmsPublicationState::Draft),
+            ],
+            [],
+        ]);
+
+        $ids = array_map(
+            static fn(DataGridRowDefinition $row): int => (int) $row->toArray()['id'],
+            $grid->execute($this->query())->items(),
+        );
+
+        self::assertSame([1, 3, 4, 2], $ids);
+    }
+
+    /**
+     * Auditni metadata oddeli datum a uzivatele pro smazany zaznam
+     */
+    public function testDeletedRowUsesStackedAuditMetadata(): void
+    {
+        $page = array_replace($this->pageRow(7), [
+            'created_at' => '2026-10-20 08:00:00',
+            'created_by_name' => 'Creator',
+            'updated_at' => '2026-10-21 09:00:00',
+            'updated_by_name' => 'Editor',
+            'deleted_at' => '2026-10-22 10:00:00',
+            'deleted_by_name' => 'Deleter',
+        ]);
+        $grid = $this->grid([
+            [$page],
+            [$this->translationRow(7, 'Deleted', CmsPublicationState::Draft)],
+            [],
+        ]);
+
+        $row = $grid->execute($this->query(status: 'deleted'))->items()[0]->toArray();
+
+        self::assertSame(['value' => '2026-10-20 08:00:00', 'secondary' => 'Creator'], $this->stackedCell($row, 'createdAt'));
+        self::assertSame(['value' => '2026-10-21 09:00:00', 'secondary' => 'Editor'], $this->stackedCell($row, 'updatedAt'));
+        self::assertSame(['value' => '2026-10-22 10:00:00', 'secondary' => 'Deleter'], $this->stackedCell($row, 'deletedAt'));
+    }
+
+    /**
+     * Obnoveny zaznam zobrazi obnovujiciho uzivatele a prazdne smazani
+     */
+    public function testRestoredRowUsesUpdatedMetadataAndDeletedFallback(): void
+    {
+        $page = array_replace($this->pageRow(7), [
+            'created_at' => '2026-10-20 08:00:00',
+            'created_by_name' => 'Creator',
+            'updated_at' => '2026-10-22 11:00:00',
+            'updated_by_name' => 'Restorer',
+            'deleted_at' => null,
+            'deleted_by_name' => null,
+        ]);
+        $grid = $this->grid([
+            [$page],
+            [$this->translationRow(7, 'Restored', CmsPublicationState::Draft)],
+            [],
+        ]);
+
+        $row = $grid->execute($this->query())->items()[0]->toArray();
+
+        self::assertSame(['value' => '2026-10-22 11:00:00', 'secondary' => 'Restorer'], $this->stackedCell($row, 'updatedAt'));
+        self::assertSame(['value' => '—', 'secondary' => '—'], $this->stackedCell($row, 'deletedAt'));
+    }
+
+    /**
      * Chybejici mutace rodice je zobrazena pouze jako stromovy kontext potomka
      */
     public function testMissingAncestorTranslationIsMarkedAsStructuralContext(): void
@@ -421,15 +501,15 @@ final class PageDataGridTest extends TestCase
     /**
      * Vytvori vychozi dotaz stromoveho gridu
      */
-    private function query(string $locale = 'cs'): DataGridQuery
+    private function query(string $locale = 'cs', string $status = 'active'): DataGridQuery
     {
         return new DataGridQuery(
             page: 1,
             pageSize: 5000,
-            sortKey: 'sortOrder',
-            sortDirection: 'asc',
+            sortKey: '',
+            sortDirection: '',
             search: '',
-            filters: ['locale' => $locale],
+            filters: ['locale' => $locale, 'status' => $status],
         );
     }
 
@@ -489,5 +569,29 @@ final class PageDataGridTest extends TestCase
         self::assertIsString($value);
 
         return $value;
+    }
+
+    /**
+     * Vrati dva textove radky serializovane stacked bunky
+     *
+     * @param array<string,mixed> $row
+     * @return array{value:string,secondary:string}
+     */
+    private function stackedCell(array $row, string $key): array
+    {
+        $cells = $row['cells'] ?? null;
+        self::assertIsArray($cells);
+        $cell = $cells[$key] ?? null;
+        self::assertIsArray($cell);
+        $presentation = $cell[0] ?? null;
+        self::assertIsArray($presentation);
+        self::assertSame('stacked', $presentation['type'] ?? null);
+        self::assertIsString($presentation['value'] ?? null);
+        self::assertIsString($presentation['secondary'] ?? null);
+
+        return [
+            'value' => $presentation['value'],
+            'secondary' => $presentation['secondary'],
+        ];
     }
 }

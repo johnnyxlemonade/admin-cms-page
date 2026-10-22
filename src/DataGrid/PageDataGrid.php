@@ -8,6 +8,7 @@ use Lemonade\Admin\Action\Presentation\ModuleActionPresentationFactory;
 use Lemonade\Admin\Authorization\AuthorizationService;
 use Lemonade\Admin\DataGrid\Action\DataGridRowActionDefinition;
 use Lemonade\Admin\DataGrid\Cell\ScalarCell;
+use Lemonade\Admin\DataGrid\Cell\StackedCell;
 use Lemonade\Admin\DataGrid\Cell\StatusCell;
 use Lemonade\Admin\DataGrid\Cell\StatusVariant;
 use Lemonade\Admin\DataGrid\Cell\ThumbnailCell;
@@ -68,14 +69,14 @@ final readonly class PageDataGrid implements DataGridProviderInterface
         return new DataGridDefinition(
             id: 'cms-page',
             columns: [
-                new DataGridColumnDefinition('title', 'page.fields.title', 'title'),
-                new DataGridColumnDefinition('state', 'page.fields.publication_state', 'state'),
-                new DataGridColumnDefinition('template', 'page.fields.template'),
-                new DataGridColumnDefinition('sortOrder', 'page.fields.sort_order', 'sortOrder'),
-                new DataGridColumnDefinition('owner', 'page.fields.owner'),
-                new DataGridColumnDefinition('createdAt', 'page.fields.created_at'),
-                new DataGridColumnDefinition('updatedAt', 'page.fields.updated_at', 'updatedAt'),
-                new DataGridColumnDefinition('deletedAt', 'page.fields.deleted_at'),
+                new DataGridColumnDefinition('title', 'page.fields.title'),
+                new DataGridColumnDefinition('state', 'page.fields.publication_state'),
+                new DataGridColumnDefinition('template', 'page.fields.template', class: 'd-none d-lg-table-cell', configurable: true),
+                new DataGridColumnDefinition('sortOrder', 'page.fields.sort_order', configurable: true, visibleByDefault: false),
+                new DataGridColumnDefinition('owner', 'page.fields.owner', class: 'd-none d-xl-table-cell', configurable: true),
+                new DataGridColumnDefinition('createdAt', 'page.fields.created_at', configurable: true, visibleByDefault: false),
+                new DataGridColumnDefinition('updatedAt', 'page.fields.updated_at', class: 'd-none d-xl-table-cell', configurable: true),
+                new DataGridColumnDefinition('deletedAt', 'page.fields.deleted_at', configurable: true, visibleByDefault: false),
                 new DataGridColumnDefinition('actions', 'admin.common.actions'),
             ],
             searchEnabled: true,
@@ -95,8 +96,6 @@ final readonly class PageDataGrid implements DataGridProviderInterface
                 ))),
                 new DataGridFilterDefinition('parent', new StaticSelectOptionSource($this->parentFilterOptions())),
             ],
-            defaultSortKey: 'sortOrder',
-            defaultSortDirection: 'asc',
             defaultPageSize: 5000,
             maximumPageSize: 5000,
             defaultView: 'active',
@@ -124,7 +123,6 @@ final readonly class PageDataGrid implements DataGridProviderInterface
         );
         $filtered = $this->filteredRows($allRows, $translations, $query, $canViewAll, $ownerId);
         $rows = $filtered['rows'];
-        usort($rows, fn(array $left, array $right): int => $this->compare($left, $right, $translations, $query));
         $hierarchyRows = array_map(
             static fn(array $row): array => [
                 'id' => (int) $row['id'],
@@ -240,30 +238,6 @@ final readonly class PageDataGrid implements DataGridProviderInterface
     }
 
     /**
-     * Porovna dva sourozence podle povoleneho sort klice
-     *
-     * @param array<string,mixed> $left
-     * @param array<string,mixed> $right
-     * @param array<int,array<string,mixed>> $translations
-     */
-    private function compare(array $left, array $right, array $translations, DataGridQuery $query): int
-    {
-        $leftTranslation = $translations[(int) $left['id']] ?? [];
-        $rightTranslation = $translations[(int) $right['id']] ?? [];
-        $comparison = match ($query->sortKey()) {
-            'title' => strnatcasecmp((string) ($leftTranslation['title'] ?? ''), (string) ($rightTranslation['title'] ?? '')),
-            'state' => (int) ($leftTranslation['publication_state'] ?? 0) <=> (int) ($rightTranslation['publication_state'] ?? 0),
-            'updatedAt' => strcmp((string) $left['updated_at'], (string) $right['updated_at']),
-            default => (int) $left['sort_order'] <=> (int) $right['sort_order'],
-        };
-        if ($comparison === 0) {
-            $comparison = (int) $left['id'] <=> (int) $right['id'];
-        }
-
-        return $query->sortDirection() === 'desc' ? -$comparison : $comparison;
-    }
-
-    /**
      * Vytvori typed row vcetne tree parent metadata
      *
      * @param array<string,mixed> $page
@@ -351,9 +325,9 @@ final readonly class PageDataGrid implements DataGridProviderInterface
                 'template' => new ScalarCell((string) $page['template_key']),
                 'sortOrder' => new ScalarCell((int) $page['sort_order']),
                 'owner' => new ScalarCell((string) ($page['owner_name'] ?? '—')),
-                'createdAt' => new ScalarCell($this->actorAndDate($page['created_by_name'] ?? null, $page['created_at'] ?? null)),
-                'updatedAt' => new ScalarCell($this->actorAndDate($page['updated_by_name'] ?? null, $page['updated_at'] ?? null)),
-                'deletedAt' => new ScalarCell($this->actorAndDate($page['deleted_by_name'] ?? null, $page['deleted_at'] ?? null)),
+                'createdAt' => $this->auditMetadataCell($page['created_at'] ?? null, $page['created_by_name'] ?? null),
+                'updatedAt' => $this->auditMetadataCell($page['updated_at'] ?? null, $page['updated_by_name'] ?? null),
+                'deletedAt' => $this->auditMetadataCell($page['deleted_at'] ?? null, $page['deleted_by_name'] ?? null),
             ],
             actions: $this->rowActions(
                 $pageId,
@@ -484,17 +458,17 @@ final readonly class PageDataGrid implements DataGridProviderInterface
     }
 
     /**
-     * Slozi auditni identitu a datum bez skryti chybejiciho uzivatele
+     * Zobrazi auditni datum nad identitou uzivatele
      */
-    private function actorAndDate(mixed $actor, mixed $date): string
+    private function auditMetadataCell(mixed $date, mixed $actor): StackedCell
     {
-        if ($date === null || trim((string) $date) === '') {
-            return '—';
-        }
-
+        $date = trim((string) $date);
         $actor = trim((string) $actor);
 
-        return ($actor === '' ? '—' : $actor) . ' · ' . (string) $date;
+        return new StackedCell(
+            value: $date === '' ? '—' : $date,
+            secondary: $date === '' || $actor === '' ? '—' : $actor,
+        );
     }
 
     /**
