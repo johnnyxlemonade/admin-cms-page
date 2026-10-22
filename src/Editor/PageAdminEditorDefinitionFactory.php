@@ -79,8 +79,8 @@ final readonly class PageAdminEditorDefinitionFactory
             ->tab($this->contentTab($contentLocale))
             ->tab($this->seoTab($translation))
             ->tab($this->settingsTab($parentOptions, $templateOptions))
-            ->tab($this->mediaTab('gallery', 'admin.file_upload.gallery', 'admin.file_upload.gallery', $galleryUpload))
-            ->tab($this->mediaTab('attachments', 'admin.file_upload.attachments', 'admin.file_upload.attachments', $attachmentUpload));
+            ->tab($this->mediaTab('gallery', 'admin.file_upload.gallery', 'admin.file_upload.gallery', 'page.editor.sections.gallery_help', $galleryUpload))
+            ->tab($this->mediaTab('attachments', 'admin.file_upload.attachments', 'admin.file_upload.attachments', 'page.editor.sections.attachments_help', $attachmentUpload));
 
         $sidebarSections = $this->sidebarSections(
             page: $page,
@@ -162,6 +162,7 @@ final readonly class PageAdminEditorDefinitionFactory
                 blocks: [new FieldGroupBlock($fields)],
                 title: '',
                 titleKey: 'page.editor.sections.content',
+                descriptionKey: 'page.editor.sections.content_help',
             )],
             labelKey: 'page.editor.tabs.content',
             default: true,
@@ -243,6 +244,7 @@ final readonly class PageAdminEditorDefinitionFactory
                 ])],
                 title: '',
                 titleKey: 'page.editor.sections.settings',
+                descriptionKey: 'page.editor.sections.settings_help',
             )],
             labelKey: 'page.editor.tabs.settings',
         );
@@ -266,7 +268,7 @@ final readonly class PageAdminEditorDefinitionFactory
     /**
      * Sestavi informativni tab pro chybejici file collection presentation
      */
-    private function placeholderTab(string $id, string $labelKey, string $titleKey): AdminEditorTab
+    private function placeholderTab(string $id, string $labelKey, string $titleKey, string $descriptionKey): AdminEditorTab
     {
         return new AdminEditorTab(
             id: $id,
@@ -277,6 +279,7 @@ final readonly class PageAdminEditorDefinitionFactory
                     blocks: [],
                     title: '',
                     titleKey: $titleKey,
+                    descriptionKey: $descriptionKey,
                 ),
             ],
             labelKey: $labelKey,
@@ -286,10 +289,15 @@ final readonly class PageAdminEditorDefinitionFactory
     /**
      * Sestavi globalni media tab nad shared Admin upload collection contractem
      */
-    private function mediaTab(string $id, string $labelKey, string $titleKey, ?AdminFileUploadCollection $upload): AdminEditorTab
-    {
+    private function mediaTab(
+        string $id,
+        string $labelKey,
+        string $titleKey,
+        string $descriptionKey,
+        ?AdminFileUploadCollection $upload,
+    ): AdminEditorTab {
         if ($upload === null) {
-            return $this->placeholderTab($id, $labelKey, $titleKey);
+            return $this->placeholderTab($id, $labelKey, $titleKey, $descriptionKey);
         }
 
         return new AdminEditorTab(
@@ -301,6 +309,7 @@ final readonly class PageAdminEditorDefinitionFactory
                     blocks: [new CustomViewBlock('admin::components.file-upload-collection', ['uploadCollection' => $upload])],
                     title: '',
                     titleKey: $titleKey,
+                    descriptionKey: $descriptionKey,
                 ),
             ],
             labelKey: $labelKey,
@@ -345,34 +354,51 @@ final readonly class PageAdminEditorDefinitionFactory
                 ],
                 title: '',
                 titleKey: 'page.editor.publication',
+                descriptionKey: 'page.editor.sections.publication_help',
             );
         }
-        $ownershipFields = [
-            new FieldColumn(Field::readonlyDisplay('created_by_name', labelKey: 'page.fields.created_by'), md: 12),
-            new FieldColumn(Field::readonlyDisplay('created_at', labelKey: 'page.fields.created_at'), md: 12),
-            new FieldColumn(Field::readonlyDisplay('updated_by_name', labelKey: 'page.fields.updated_by'), md: 12),
-            new FieldColumn(Field::readonlyDisplay('updated_at', labelKey: 'page.fields.updated_at'), md: 12),
+        $metadata = [
+            [
+                'labelKey' => 'page.fields.created_by',
+                'value' => trim((string) ($page['created_by_name'] ?? '')),
+                'detail' => trim((string) ($page['created_at'] ?? '')),
+            ],
+            [
+                'labelKey' => 'page.fields.updated_by',
+                'value' => trim((string) ($page['updated_by_name'] ?? '')),
+                'detail' => trim((string) ($page['updated_at'] ?? '')),
+            ],
+            [
+                'labelKey' => 'page.fields.owner',
+                'value' => trim((string) ($page['owner_name'] ?? '')),
+                'detail' => null,
+                'wide' => true,
+                'current' => true,
+            ],
         ];
-        $ownershipFields[] = new FieldColumn(
-            $canAssignOwner
-                ? Field::actionSelect(
-                    name: 'owner_id',
-                    actionKey: 'assign-owner',
-                    labelKey: 'page.fields.owner',
-                    actionLabelKey: 'page.actions.assign_owner',
-                )->options($ownerOptions)
-                : Field::readonlyDisplay('owner_name', labelKey: 'page.fields.owner'),
-            md: 12,
-        );
         if (($page['deleted_at'] ?? null) !== null) {
-            $ownershipFields[] = new FieldColumn(Field::readonlyDisplay('deleted_by_name', labelKey: 'page.fields.deleted_by'), md: 12);
-            $ownershipFields[] = new FieldColumn(Field::readonlyDisplay('deleted_at', labelKey: 'page.fields.deleted_at'), md: 12);
+            $metadata[] = [
+                'labelKey' => 'page.fields.deleted_by',
+                'value' => trim((string) ($page['deleted_by_name'] ?? '')),
+                'detail' => trim((string) ($page['deleted_at'] ?? '')),
+                'wide' => true,
+            ];
+        }
+        $ownershipBlocks = [new CustomViewBlock('admin::components.editor-audit-metadata', ['metadata' => $metadata])];
+        if ($canAssignOwner) {
+            $ownershipBlocks[] = new FieldGroupBlock([new FieldColumn(
+                Field::actionSelect('owner_id', 'assign-owner', labelKey: 'page.actions.assign_owner', actionLabelKey: 'page.actions.assign_owner_submit')
+                    ->options($ownerOptions)
+                    ->attributes(['data-lemonade-searchable' => true]),
+                md: 12,
+            )]);
         }
         $sections[] = new SectionBlock(
             id: 'ownership',
-            blocks: [new FieldGroupBlock($ownershipFields)],
+            blocks: $ownershipBlocks,
             title: '',
             titleKey: 'page.editor.ownership',
+            descriptionKey: 'page.editor.sections.ownership_help',
         );
         if ($featuredImageUpload !== null) {
             $sections[] = new SectionBlock(
@@ -385,6 +411,7 @@ final readonly class PageAdminEditorDefinitionFactory
                 ],
                 title: '',
                 titleKey: 'page.editor.thumbnail.title',
+                descriptionKey: 'page.editor.sections.thumbnail_help',
             );
         }
 
