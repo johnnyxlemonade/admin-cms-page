@@ -11,7 +11,6 @@ use Lemonade\Admin\Authorization\AuthorizationService;
 use Lemonade\Admin\Authorization\CurrentPrincipalProviderInterface;
 use Lemonade\Admin\DataGrid\DataGridRowDefinition;
 use Lemonade\Admin\DataGrid\Query\DataGridQuery;
-use Lemonade\Admin\File\FileReadModel;
 use Lemonade\Admin\Localization\LanguageRegistry;
 use Lemonade\Admin\Module\AdminModuleRegistry;
 use Lemonade\Admin\Module\AdminModuleRouteResolver;
@@ -552,7 +551,7 @@ final class PageDataGridTest extends TestCase
             $actionPresentation,
             $routes,
             $urls,
-            new AdminFileModel($driver, new FileReadModel($driver)),
+            new AdminFileModel($driver),
             new AdminThumbnailComponent(new ImageUrlGenerator($urls, $variants)),
         );
     }
