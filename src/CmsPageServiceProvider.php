@@ -17,7 +17,6 @@ use Lemonade\Cms\Page\Actions\PageReorderAction;
 use Lemonade\Cms\Page\DataGrid\PageDataGrid;
 use Lemonade\Cms\Page\Editor\PageEditor;
 use Lemonade\Cms\Page\Services\PageService;
-use Lemonade\Cms\Routing\Cms\PublicCmsRouteHandlerRegistry;
 use Lemonade\Framework\Container\ContainerBuilderInterface;
 use Lemonade\Framework\Container\ContainerInterface;
 use Lemonade\Framework\Core\BootableServiceProviderInterface;
@@ -25,12 +24,12 @@ use Lemonade\Framework\Core\ServiceProviderInterface;
 use Lemonade\Framework\Localization\TranslationResourceRegistry;
 
 /**
- * Registruje CMS Page contribution do sdileneho Admin a CMS runtime
+ * Registruje CMS Page contribution do sdileneho Admin runtime
  */
 final readonly class CmsPageServiceProvider implements ServiceProviderInterface, BootableServiceProviderInterface
 {
     /**
-     * Registruje DI definitions modulu a host public handler
+     * Registruje DI definitions administracniho modulu
      */
     public function register(ContainerBuilderInterface $container): void
     {
@@ -64,7 +63,6 @@ final readonly class CmsPageServiceProvider implements ServiceProviderInterface,
                 1,
             ),
         );
-        $container->scoped(PublicPageRouteHandler::class, PublicPageRouteHandler::class);
     }
 
     /**
@@ -82,9 +80,5 @@ final readonly class CmsPageServiceProvider implements ServiceProviderInterface,
         $container->get(ModulePageRegistry::class)->registerEditor(ModuleManifest::CODE, PageModulePageProvider::class);
         $container->get(EditorRegistry::class)->register(ModuleManifest::CODE, PageEditor::class);
         (new PageActionRegistrar($container->get(ModuleActionRegistry::class)))->register();
-        $container->get(PublicCmsRouteHandlerRegistry::class)->registerFactory(
-            ModuleManifest::CODE,
-            static fn(ContainerInterface $container): PublicPageRouteHandler => $container->get(PublicPageRouteHandler::class),
-        );
     }
 }
