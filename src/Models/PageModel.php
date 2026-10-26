@@ -457,10 +457,11 @@ final class PageModel extends Model
                 'translation.published_at',
             ])
             ->selectRaw('route.path AS canonical_path')
-            ->join(
-                'cms_route route',
-                "route.module_code = 'cms.page' AND route.entity_id = translation.page_id AND route.locale = translation.locale",
-                'LEFT',
+            ->joinRaw(
+                table: 'cms_route route',
+                condition: 'route.module_code = ? AND route.entity_id = translation.page_id AND route.locale = translation.locale',
+                bindings: ['cms.page'],
+                type: 'LEFT',
             )
             ->where('translation.locale', $locale);
         if ($pageIds !== null) {
@@ -532,10 +533,11 @@ final class PageModel extends Model
                 'translation.publication_state', 'translation.published_at',
             ])
             ->selectRaw('route.path AS canonical_path')
-            ->join(
-                'cms_route route',
-                "route.module_code = 'cms.page' AND route.entity_id = translation.page_id AND route.locale = translation.locale",
-                'LEFT',
+            ->joinRaw(
+                table: 'cms_route route',
+                condition: 'route.module_code = ? AND route.entity_id = translation.page_id AND route.locale = translation.locale',
+                bindings: ['cms.page'],
+                type: 'LEFT',
             )
             ->where('translation.page_id', $pageId)
             ->orderBy('translation.locale', 'ASC')
@@ -559,10 +561,11 @@ final class PageModel extends Model
             ->table('system_language language')
             ->select(['language.code', 'language.name', 'language.enabled', 'language.is_default'])
             ->selectRaw('CASE WHEN translation.id IS NULL THEN 0 ELSE 1 END AS has_translation')
-            ->join(
-                'cms_page_translation translation',
-                'translation.locale = language.code AND translation.page_id = ' . $pageId,
-                'LEFT',
+            ->joinRaw(
+                table: 'cms_page_translation translation',
+                condition: 'translation.locale = language.code AND translation.page_id = ?',
+                bindings: [$pageId],
+                type: 'LEFT',
             )
             ->whereRaw('language.enabled = 1 OR translation.id IS NOT NULL')
             ->orderBy('language.sort_order', 'ASC')
@@ -583,9 +586,11 @@ final class PageModel extends Model
         $rows = QueryBuilder::make($this->db)
             ->table('system_language language')
             ->select(['language.code', 'language.name'])
-            ->join(
+            ->joinOn(
                 'cms_page_translation translation',
-                'translation.locale = language.code',
+                'translation.locale',
+                '=',
+                'language.code',
                 'LEFT',
             )
             ->whereRaw('language.enabled = 1 OR translation.id IS NOT NULL')
@@ -629,7 +634,7 @@ final class PageModel extends Model
                 'translation.locale', 'translation.title', 'translation.content',
                 'translation.page_title', 'translation.meta_description', 'translation.published_at',
             ])
-            ->join('cms_page_translation translation', 'translation.page_id = page.id')
+            ->joinOn('cms_page_translation translation', 'translation.page_id', '=', 'page.id')
             ->where('page.id', $pageId)
             ->where('translation.locale', $locale)
             ->where('translation.publication_state', CmsPublicationState::Published->value)
@@ -670,7 +675,7 @@ final class PageModel extends Model
             $row = $this->query()
                 ->from('cms_page page')
                 ->select(['page.parent_id'])
-                ->join('cms_page_translation translation', 'translation.page_id = page.id')
+                ->joinOn('cms_page_translation translation', 'translation.page_id', '=', 'page.id')
                 ->where('page.id', $parentId)
                 ->where('translation.locale', $locale)
                 ->where('translation.publication_state', CmsPublicationState::Published->value)

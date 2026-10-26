@@ -7,7 +7,7 @@
     "php": ">=8.3 <8.6",
     "johnnyxlemonade/admin-platform": "dev-main",
     "johnnyxlemonade/cms-core": "dev-main",
-    "johnnyxlemonade/framework": "dev-master",
+    "johnnyxlemonade/framework": "dev-main",
     "psr/http-message": "^2.0"
   },
   "autoload": {

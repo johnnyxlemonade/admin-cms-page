@@ -327,8 +327,64 @@ final class PageDataGridTest extends TestCase
         $locales = (new PageModel($driver))->dataGridLocales();
 
         self::assertSame(['cs', 'en'], array_column($locales, 'code'));
-        self::assertStringContainsString('LEFT JOIN cms_page_translation translation', $capturedSql);
+        self::assertStringContainsString('LEFT JOIN cms_page_translation AS translation ON translation.locale = language.code', $capturedSql);
         self::assertStringContainsString('language.enabled = 1 OR translation.id IS NOT NULL', $capturedSql);
+    }
+
+    /**
+     * Editor locale JOIN predava identitu stranky jako binding
+     */
+    public function testEditorLocalesBindPageIdentityInJoin(): void
+    {
+        $capturedSql = '';
+        $capturedBindings = [];
+        $result = $this->createMock(DatabaseResultInterface::class);
+        $result->method('result_array')->willReturn([]);
+        $driver = $this->createMock(DatabaseDriverInterface::class);
+        $driver->method('protect_identifiers')->willReturnCallback(
+            static fn(string $identifier): string => $identifier,
+        );
+        $driver->method('query')->willReturnCallback(
+            static function (string $sql, array $bindings = []) use (&$capturedSql, &$capturedBindings, $result): DatabaseResultInterface {
+                $capturedSql = $sql;
+                $capturedBindings = $bindings;
+
+                return $result;
+            },
+        );
+
+        (new PageModel($driver))->editorLocales(37);
+
+        self::assertStringContainsString('translation.page_id = ?', $capturedSql);
+        self::assertSame([37], $capturedBindings);
+    }
+
+    /**
+     * Canonical route JOIN predava stabilni kod modulu jako binding
+     */
+    public function testTranslationProjectionBindsModuleCodeInJoin(): void
+    {
+        $capturedSql = '';
+        $capturedBindings = [];
+        $result = $this->createMock(DatabaseResultInterface::class);
+        $result->method('result_array')->willReturn([]);
+        $driver = $this->createMock(DatabaseDriverInterface::class);
+        $driver->method('protect_identifiers')->willReturnCallback(
+            static fn(string $identifier): string => $identifier,
+        );
+        $driver->method('query')->willReturnCallback(
+            static function (string $sql, array $bindings = []) use (&$capturedSql, &$capturedBindings, $result): DatabaseResultInterface {
+                $capturedSql = $sql;
+                $capturedBindings = $bindings;
+
+                return $result;
+            },
+        );
+
+        (new PageModel($driver))->translationsForLocale('cs');
+
+        self::assertStringContainsString('route.module_code = ?', $capturedSql);
+        self::assertSame(['cms.page', 'cs'], $capturedBindings);
     }
 
     /**
