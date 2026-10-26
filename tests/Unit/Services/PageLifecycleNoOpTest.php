@@ -14,7 +14,7 @@ use Lemonade\Cms\Page\Models\PageModel;
 use Lemonade\Cms\Page\Publication\PagePublicationPlanResolver;
 use Lemonade\Cms\Page\Routing\PageSubtreeRouteMapper;
 use Lemonade\Cms\Page\Services\PageService;
-use Lemonade\Cms\Page\Template\PageTemplateRendererInterface;
+use Lemonade\Cms\Page\Template\PageTemplateProviderInterface;
 use Lemonade\Cms\Routing\Cms\CmsRouteReservationService;
 use Lemonade\Framework\Database\Connection\ConnectionInterface;
 use Lemonade\Framework\Database\Database;
@@ -149,7 +149,7 @@ final class PageLifecycleNoOpTest extends TestCase
             $this->instanceWithoutConstructor(CmsRouteReservationService::class),
             new Slugger(),
             $events,
-            $this->createMock(PageTemplateRendererInterface::class),
+            $this->createMock(PageTemplateProviderInterface::class),
             new PageSubtreeRouteMapper(),
             new PagePublicationPlanResolver(),
             new LocalUserDirectory($database),

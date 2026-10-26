@@ -25,7 +25,7 @@ use Lemonade\Cms\Page\DataGrid\PageDataGrid;
 use Lemonade\Cms\Page\Editor\PageAdminEditorDefinitionFactory;
 use Lemonade\Cms\Page\Hierarchy\PageHierarchy;
 use Lemonade\Cms\Page\Models\PageModel;
-use Lemonade\Cms\Page\Template\PageTemplateRendererInterface;
+use Lemonade\Cms\Page\Template\PageTemplateProviderInterface;
 use Lemonade\Framework\Localization\TranslatorInterface;
 use Lemonade\Framework\Routing\UrlGenerator;
 
@@ -46,7 +46,7 @@ final readonly class PageModulePageProvider implements ModuleIndexPageProviderIn
         private PageAdminEditorDefinitionFactory $adminEditorDefinitions,
         private AdminFileUploadComponent $files,
         private PageModel $pages,
-        private PageTemplateRendererInterface $templates,
+        private PageTemplateProviderInterface $templates,
         private LanguageRegistry $languages,
         private LocalUserDirectory $users,
     ) {}
@@ -155,10 +155,10 @@ final readonly class PageModulePageProvider implements ModuleIndexPageProviderIn
                         'cms.page.publish_own',
                         $ownerId,
                     ),
-                    canAssignOwner: $canAssignOwner,
-                    ownerOptions: $canAssignOwner ? $this->ownerOptions() : [],
                     parentOptions: $this->parentOptions((int) $page['id']),
                     templateOptions: $this->templateOptions((string) ($page['template_key'] ?? '')),
+                    canAssignOwner: $canAssignOwner,
+                    ownerOptions: $canAssignOwner ? $this->ownerOptions() : [],
                     context: $context,
                     featuredImageUpload: $this->files->collection(
                         module: 'cms.page',

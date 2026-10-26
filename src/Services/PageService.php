@@ -16,7 +16,7 @@ use Lemonade\Cms\Page\Hierarchy\PageHierarchy;
 use Lemonade\Cms\Page\Models\PageModel;
 use Lemonade\Cms\Page\Publication\PagePublicationPlanResolver;
 use Lemonade\Cms\Page\Routing\PageSubtreeRouteMapper;
-use Lemonade\Cms\Page\Template\PageTemplateRendererInterface;
+use Lemonade\Cms\Page\Template\PageTemplateProviderInterface;
 use Lemonade\Cms\Routing\Cms\CmsRouteReservationService;
 use Lemonade\Cms\Routing\Cms\CmsRouteValidationException;
 use Lemonade\Framework\Support\Slug\Slugger;
@@ -38,7 +38,7 @@ final readonly class PageService
         private CmsRouteReservationService $routes,
         private Slugger $slugger,
         private TransactionalEventProcessor $events,
-        private PageTemplateRendererInterface $templates,
+        private PageTemplateProviderInterface $templates,
         private PageSubtreeRouteMapper $subtreeRoutes,
         private PagePublicationPlanResolver $publicationPlans,
         private LocalUserDirectory $users,

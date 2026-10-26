@@ -11,14 +11,11 @@ use Lemonade\Admin\Identity\LocalUserDirectory;
 use Lemonade\Admin\Localization\LanguageRegistry;
 use Lemonade\Cms\Page\Models\PageModel;
 use Lemonade\Cms\Page\Publication\PagePublicationPlanResolver;
-use Lemonade\Cms\Page\PublicPage;
 use Lemonade\Cms\Page\Routing\PageSubtreeRouteMapper;
 use Lemonade\Cms\Page\Services\PageService;
 use Lemonade\Cms\Page\Template\PageTemplateDefinition;
-use Lemonade\Cms\Page\Template\PageTemplateRendererInterface;
-use Lemonade\Cms\Routing\Cms\CmsRoute;
+use Lemonade\Cms\Page\Template\PageTemplateProviderInterface;
 use Lemonade\Cms\Routing\Cms\CmsRouteReservationService;
-use Lemonade\Cms\Routing\Locale\PublicLocaleResolution;
 use Lemonade\Framework\Cache\CacheManager;
 use Lemonade\Framework\Cache\Store\ArrayCacheItemPool;
 use Lemonade\Framework\Database\Connection\ConnectionInterface;
@@ -26,9 +23,7 @@ use Lemonade\Framework\Database\Database;
 use Lemonade\Framework\Database\DatabaseDriverInterface;
 use Lemonade\Framework\Database\DatabaseResultInterface;
 use Lemonade\Framework\Support\Slug\Slugger;
-use Lemonade\Framework\View\ViewRendererInterface;
 use PHPUnit\Framework\TestCase;
-use Psr\Http\Message\ResponseInterface;
 
 /**
  * Overuje save rozhodnuti Pages bez databazovych write integraci
@@ -188,7 +183,7 @@ final class PageServiceValidationTest extends TestCase
             routes: $this->instanceWithoutConstructor(CmsRouteReservationService::class),
             slugger: new Slugger(),
             events: $this->instanceWithoutConstructor(TransactionalEventProcessor::class),
-            templates: new PageServiceTemplateRendererStub(),
+            templates: new PageServiceTemplateProviderStub(),
             subtreeRoutes: new PageSubtreeRouteMapper(),
             publicationPlans: new PagePublicationPlanResolver(),
             users: new LocalUserDirectory($database),
@@ -279,19 +274,10 @@ final class PageServiceValidationTest extends TestCase
 /**
  * Poskytuje jedinou dostupnou host content sablonu
  */
-final readonly class PageServiceTemplateRendererStub implements PageTemplateRendererInterface
+final readonly class PageServiceTemplateProviderStub implements PageTemplateProviderInterface
 {
     public function templates(): array
     {
         return [new PageTemplateDefinition('content', 'page.template.content')];
-    }
-
-    public function render(
-        PublicPage $page,
-        PublicLocaleResolution $locale,
-        CmsRoute $route,
-        ViewRendererInterface $views,
-    ): ?ResponseInterface {
-        return null;
     }
 }

@@ -14,7 +14,7 @@ use Lemonade\Cms\Page\Models\PageModel;
 use Lemonade\Cms\Page\Publication\PagePublicationPlanResolver;
 use Lemonade\Cms\Page\Routing\PageSubtreeRouteMapper;
 use Lemonade\Cms\Page\Services\PageService;
-use Lemonade\Cms\Page\Template\PageTemplateRendererInterface;
+use Lemonade\Cms\Page\Template\PageTemplateProviderInterface;
 use Lemonade\Cms\Routing\Cms\CmsReservedPathGuard;
 use Lemonade\Cms\Routing\Cms\CmsRouteCandidateResolver;
 use Lemonade\Cms\Routing\Cms\CmsRouteRepository;
@@ -118,7 +118,7 @@ final class PageUrlSegmentTest extends TestCase
             $routes,
             new Slugger(),
             $events,
-            $this->createMock(PageTemplateRendererInterface::class),
+            $this->createMock(PageTemplateProviderInterface::class),
             new PageSubtreeRouteMapper(),
             new PagePublicationPlanResolver(),
             new LocalUserDirectory($database),

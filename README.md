@@ -11,11 +11,13 @@ contract; this package has no slug column or public route resolver of its own.
 
 ## Host contract
 
-The host application binds `PageTemplateRendererInterface`, advertises at least
-one `PageTemplateDefinition` with a host-owned translation key, and renders the
-already resolved `PublicPage`, `PublicLocaleResolution`, and `CmsRoute`. The
-package deliberately contains no News queries, form implementation, page
-builder, or homepage ownership.
+The host application binds `PageTemplateProviderInterface` and advertises at
+least one `PageTemplateDefinition` with a host-owned translation key. The
+package uses those definitions for the initial draft template, editor options,
+and save validation. The host owns public read models, conversion into its
+presentation DTO, and all public rendering. The package deliberately contains
+no public query, presentation DTO, News query, page builder, or homepage
+ownership.
 
 ## Installation
 

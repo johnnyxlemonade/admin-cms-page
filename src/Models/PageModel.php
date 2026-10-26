@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Lemonade\Cms\Page\Models;
 
 use Lemonade\Cms\CmsPublicationState;
-use Lemonade\Cms\Page\PublicPage;
 use Lemonade\Framework\Database\Model;
 use Lemonade\Framework\Database\QueryBuilder;
 
@@ -620,74 +619,6 @@ final class PageModel extends Model
             ->where('locale', $locale)
             ->where('publication_state', CmsPublicationState::Published->value)
             ->exists();
-    }
-
-    /**
-     * Nacte publikovanou lokalizaci a overi publikovane predky
-     */
-    public function publishedPage(int $pageId, string $locale, string $now): ?PublicPage
-    {
-        $row = $this->query()
-            ->from('cms_page page')
-            ->select([
-                'page.id', 'page.parent_id', 'page.template_key',
-                'translation.locale', 'translation.title', 'translation.content',
-                'translation.page_title', 'translation.meta_description', 'translation.published_at',
-            ])
-            ->joinOn('cms_page_translation translation', 'translation.page_id', '=', 'page.id')
-            ->where('page.id', $pageId)
-            ->where('translation.locale', $locale)
-            ->where('translation.publication_state', CmsPublicationState::Published->value)
-            ->where('translation.published_at <=', $now)
-            ->first();
-        if ($row === null || trim((string) $row['title']) === '') {
-            return null;
-        }
-        $parentId = $row['parent_id'] === null ? null : (int) $row['parent_id'];
-        if (!$this->ancestorsPublished($parentId, $locale, $now)) {
-            return null;
-        }
-
-        return new PublicPage(
-            id: (int) $row['id'],
-            parentId: $parentId,
-            templateKey: (string) $row['template_key'],
-            locale: (string) $row['locale'],
-            title: (string) $row['title'],
-            content: $row['content'] === null ? null : (string) $row['content'],
-            pageTitle: $row['page_title'] === null ? null : (string) $row['page_title'],
-            metaDescription: $row['meta_description'] === null ? null : (string) $row['meta_description'],
-            publishedAt: (string) $row['published_at'],
-        );
-    }
-
-    /**
-     * Overi publikovany retezec predku bez rekurzivniho SQL
-     */
-    private function ancestorsPublished(?int $parentId, string $locale, string $now): bool
-    {
-        $visited = [];
-        while ($parentId !== null) {
-            if (isset($visited[$parentId])) {
-                return false;
-            }
-            $visited[$parentId] = true;
-            $row = $this->query()
-                ->from('cms_page page')
-                ->select(['page.parent_id'])
-                ->joinOn('cms_page_translation translation', 'translation.page_id', '=', 'page.id')
-                ->where('page.id', $parentId)
-                ->where('translation.locale', $locale)
-                ->where('translation.publication_state', CmsPublicationState::Published->value)
-                ->where('translation.published_at <=', $now)
-                ->first();
-            if ($row === null) {
-                return false;
-            }
-            $parentId = $row['parent_id'] === null ? null : (int) $row['parent_id'];
-        }
-
-        return true;
     }
 
     /**
