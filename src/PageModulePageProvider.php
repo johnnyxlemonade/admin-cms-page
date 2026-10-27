@@ -21,6 +21,7 @@ use Lemonade\Admin\Page\Contract\ModuleEditorPageProviderInterface;
 use Lemonade\Admin\Page\Contract\ModuleIndexPageProviderInterface;
 use Lemonade\Admin\Page\ModulePage;
 use Lemonade\Admin\Presentation\AdminFileUploadComponent;
+use Lemonade\Cms\CmsPublicationState;
 use Lemonade\Cms\Page\DataGrid\PageDataGrid;
 use Lemonade\Cms\Page\Editor\PageAdminEditorDefinitionFactory;
 use Lemonade\Cms\Page\Hierarchy\PageHierarchy;
@@ -192,7 +193,7 @@ final readonly class PageModulePageProvider implements ModuleIndexPageProviderIn
                         'url_segment' => $canonicalPath === '' ? '' : basename($canonicalPath),
                         'parent_id' => $page['parent_id'] === null ? '' : 'page-' . (int) $page['parent_id'],
                         'template_key' => (string) ($page['template_key'] ?? ''),
-                        'publication_state' => (string) ($translation['publication_state'] ?? 0),
+                        'publication_state' => CmsPublicationState::from((int) ($translation['publication_state'] ?? CmsPublicationState::New->value))->editorValue(),
                         'published_at' => (string) ($translation['published_at'] ?? ''),
                         'created_by_name' => (string) ($page['created_by_name'] ?? '—'),
                         'created_at' => (string) ($page['created_at'] ?? ''),

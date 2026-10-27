@@ -58,6 +58,33 @@ final class PagePublicationPlanResolverTest extends TestCase
             true,
             false,
         ];
+        yield 'explicit draft promotes existing new' => [
+            CmsPublicationState::Draft,
+            '',
+            ['publication_state' => CmsPublicationState::New->value, 'published_at' => null],
+            CmsPublicationState::Draft,
+            null,
+            true,
+            false,
+        ];
+        yield 're-edit draft keeps draft' => [
+            CmsPublicationState::Draft,
+            '',
+            ['publication_state' => CmsPublicationState::Draft->value, 'published_at' => null],
+            CmsPublicationState::Draft,
+            null,
+            false,
+            false,
+        ];
+        yield 'scheduled publication keeps selected date' => [
+            CmsPublicationState::Published,
+            '2027-03-01T10:30',
+            ['publication_state' => CmsPublicationState::Draft->value, 'published_at' => null],
+            CmsPublicationState::Published,
+            '2027-03-01 10:30:00',
+            true,
+            true,
+        ];
         yield 'publishing draft uses now' => [
             CmsPublicationState::Published,
             '',

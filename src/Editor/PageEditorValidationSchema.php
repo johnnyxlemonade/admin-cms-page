@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Lemonade\Cms\Page\Editor;
 
+use Lemonade\Cms\CmsPublicationState;
 use Lemonade\Framework\Localization\TranslatorInterface;
 use Lemonade\Framework\Validation\ValidationSchema;
 
@@ -44,7 +45,7 @@ final readonly class PageEditorValidationSchema
             ->field('template_key', $this->translator->get('page.fields.template'))
                 ->required($this->translator->get('page.validation.template_invalid'))
             ->field('publication_state', $this->translator->get('page.fields.publication_state'))
-                ->inList(['0', '1', '2'], $this->translator->get('page.validation.publication_invalid'))
+                ->inList(array_keys(CmsPublicationState::editorOptionLabelKeys()), $this->translator->get('page.validation.publication_invalid'))
             ->field('published_at', $this->translator->get('page.fields.published_at'))
             ->field('content', $this->translator->get('page.fields.content'))
             ->end();
