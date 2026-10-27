@@ -187,6 +187,7 @@ final readonly class PageModulePageProvider implements ModuleIndexPageProviderIn
                 'adminEditorContext' => new AdminEditorRenderContext(
                     values: [
                         'title' => (string) ($translation['title'] ?? ''),
+                        'summary' => (string) ($translation['summary'] ?? ''),
                         'content' => (string) ($translation['content'] ?? ''),
                         'page_title' => (string) ($translation['page_title'] ?? ''),
                         'meta_description' => (string) ($translation['meta_description'] ?? ''),

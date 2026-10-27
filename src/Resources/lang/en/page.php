@@ -25,11 +25,8 @@ return [
     'fields' => [
         'locale' => 'Language',
         'title' => 'Page title',
+        'summary' => 'Summary',
         'content' => 'Content',
-        'page_title' => 'Page title',
-        'page_title_help' => 'Recommended length is 50–60 characters. This title appears in search results.',
-        'meta_description' => 'Meta description',
-        'meta_description_help' => 'Recommended length is 120–160 characters. This description appears in search results.',
         'thumbnail' => 'Thumbnail',
         'parent' => 'Parent page',
         'sort_order' => 'Sibling order',
@@ -87,14 +84,11 @@ return [
         ],
         'tabs' => [
             'content' => 'Content',
-            'seo' => 'SEO',
             'settings' => 'Settings',
         ],
         'sections' => [
             'content' => 'Page content',
             'content_help' => 'Basic page information and content',
-            'seo' => 'SEO settings',
-            'seo_help' => 'Search engine title, description, and URL settings',
             'settings' => 'Hierarchy and template',
             'settings_help' => 'Page placement in the website structure and template selection',
             'gallery_help' => 'Images assigned to the record',

@@ -6,6 +6,7 @@ namespace Lemonade\Cms\Page\Editor;
 
 use DomainException;
 use Lemonade\Admin\Authorization\AuthorizationService;
+use Lemonade\Admin\Cms\Content\CmsPublicationEditorValues;
 use Lemonade\Admin\Editor\Contract\EditorAccessPolicyInterface;
 use Lemonade\Admin\Editor\Contract\EditorFieldAccessPolicyInterface;
 use Lemonade\Admin\Editor\Contract\EditorProviderInterface;
@@ -56,6 +57,7 @@ final readonly class PageEditor implements
             fields: [
                 new EditorFieldDefinition(name: 'locale', type: 'text', readOnly: false, permission: null),
                 new EditorFieldDefinition(name: 'title', type: 'text', readOnly: false, permission: null),
+                new EditorFieldDefinition(name: 'summary', type: 'text', readOnly: false, permission: null),
                 new EditorFieldDefinition(name: 'content', type: 'text', readOnly: false, permission: null),
                 new EditorFieldDefinition(name: 'page_title', type: 'text', readOnly: false, permission: null),
                 new EditorFieldDefinition(name: 'meta_description', type: 'text', readOnly: false, permission: null),
@@ -164,7 +166,13 @@ final readonly class PageEditor implements
         }
 
         return new EditorSaveResult(
-            data: ['id' => $id, 'editUrl' => $this->editUrl($id, (string) $data['locale'])],
+            data: [
+                'id' => $id,
+                'editUrl' => $this->editUrl($id, (string) $data['locale']),
+                'editorFields' => isset($data['publication_state'])
+                    ? CmsPublicationEditorValues::forLocale($this->updateData($id)['page']['translations'], (string) $data['locale'])
+                    : [],
+            ],
             messageKey: 'page.editor.updated',
         );
     }

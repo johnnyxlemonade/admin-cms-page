@@ -25,11 +25,8 @@ return [
     'fields' => [
         'locale' => 'Jazyk',
         'title' => 'Název stránky',
+        'summary' => 'Úvodní text',
         'content' => 'Obsah',
-        'page_title' => 'Název na stránce',
-        'page_title_help' => 'Doporučená délka je 50–60 znaků. Tento název se zobrazí ve výsledcích vyhledávání.',
-        'meta_description' => 'Meta description',
-        'meta_description_help' => 'Doporučená délka je 120–160 znaků. Tento popis se zobrazí ve výsledcích vyhledávání.',
         'thumbnail' => 'Hlavní obrázek',
         'parent' => 'Nadřazená stránka',
         'sort_order' => 'Pořadí mezi sourozenci',
@@ -87,14 +84,11 @@ return [
         ],
         'tabs' => [
             'content' => 'Obsah',
-            'seo' => 'SEO',
             'settings' => 'Nastavení',
         ],
         'sections' => [
             'content' => 'Obsah stránky',
             'content_help' => 'Základní informace a obsah stránky',
-            'seo' => 'SEO nastavení',
-            'seo_help' => 'Nastavení názvu, popisu a adresy pro vyhledávače',
             'settings' => 'Hierarchie a šablona',
             'settings_help' => 'Umístění stránky ve struktuře webu a výběr šablony',
             'gallery_help' => 'Obrázky přiřazené k záznamu',

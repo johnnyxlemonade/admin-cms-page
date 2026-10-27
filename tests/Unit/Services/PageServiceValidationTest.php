@@ -35,12 +35,15 @@ final class PageServiceValidationTest extends TestCase
      */
     public function testNoOpSaveWithoutPublicationInputDoesNotEnterAuditedMutation(): void
     {
+        $translation = $this->translation();
+        $translation['summary'] = 'Úvodní text';
         $service = $this->service(
             currentTemplate: 'content',
-            translation: $this->translation(),
+            translation: $translation,
             routePath: 'kontakt',
         );
         $payload = $this->payload();
+        $payload['summary'] = 'Úvodní text';
         unset($payload['publication_state'], $payload['published_at']);
 
         $service->save(AuditActor::user(1), 7, $payload);
@@ -229,6 +232,7 @@ final class PageServiceValidationTest extends TestCase
             'page_id' => 7,
             'locale' => $locale,
             'title' => 'Kontakt',
+            'summary' => null,
             'content' => null,
             'page_title' => null,
             'meta_description' => null,
@@ -248,6 +252,7 @@ final class PageServiceValidationTest extends TestCase
         return [
             'locale' => $locale,
             'title' => 'Kontakt',
+            'summary' => '',
             'content' => '',
             'page_title' => '',
             'meta_description' => '',

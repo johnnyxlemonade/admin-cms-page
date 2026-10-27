@@ -55,6 +55,7 @@ final readonly class CreateCmsPages implements MigrationInterface
             $table->unsignedBigInteger('page_id')->comment('Stabilni vlastnik lokalizovaneho obsahu');
             $table->string('locale', 10)->comment('Canonical kod content locale');
             $table->string('title', 180)->nullable()->comment('Lokalizovany nadpis stranky');
+            $table->longText('summary')->nullable()->comment('Lokalizovany uvodni text stranky');
             $table->longText('content')->nullable()->comment('Lokalizovany obsah stranky');
             $table->string('page_title', 180)->nullable()->comment('Lokalizovany SEO titul');
             $table->string('meta_description', 255)->nullable()->comment('Lokalizovany SEO popis');

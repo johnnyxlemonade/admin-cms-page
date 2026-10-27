@@ -54,6 +54,7 @@ final class PageModel extends Model
             'page_id' => $pageId,
             'locale' => $locale,
             'title' => null,
+            'summary' => null,
             'content' => null,
             'page_title' => null,
             'meta_description' => null,
@@ -190,7 +191,7 @@ final class PageModel extends Model
     {
         return $this->translations()
             ->select([
-                'id', 'page_id', 'locale', 'title', 'content', 'page_title',
+                'id', 'page_id', 'locale', 'title', 'summary', 'content', 'page_title',
                 'meta_description', 'publication_state', 'published_at',
             ])
             ->where('page_id', $pageId)
@@ -207,7 +208,7 @@ final class PageModel extends Model
     {
         return $this->translations()
             ->select([
-                'id', 'page_id', 'locale', 'title', 'content', 'page_title',
+                'id', 'page_id', 'locale', 'title', 'summary', 'content', 'page_title',
                 'meta_description', 'publication_state', 'published_at',
             ])
             ->where('page_id', $pageId)
@@ -223,6 +224,7 @@ final class PageModel extends Model
         int $pageId,
         string $locale,
         string $title,
+        ?string $summary,
         ?string $content,
         ?string $pageTitle,
         ?string $metaDescription,
@@ -236,6 +238,7 @@ final class PageModel extends Model
                 ->where('locale', $locale)
                 ->set([
                     'title' => $title,
+                    'summary' => $summary,
                     'content' => $content,
                     'page_title' => $pageTitle,
                     'meta_description' => $metaDescription,
@@ -250,6 +253,7 @@ final class PageModel extends Model
             'page_id' => $pageId,
             'locale' => $locale,
             'title' => $title,
+            'summary' => $summary,
             'content' => $content,
             'page_title' => $pageTitle,
             'meta_description' => $metaDescription,
@@ -527,7 +531,7 @@ final class PageModel extends Model
         $translations = $this->translations()
             ->from('cms_page_translation translation')
             ->select([
-                'translation.locale', 'translation.title', 'translation.content',
+                'translation.locale', 'translation.title', 'translation.summary', 'translation.content',
                 'translation.page_title', 'translation.meta_description',
                 'translation.publication_state', 'translation.published_at',
             ])

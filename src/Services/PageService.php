@@ -87,6 +87,7 @@ final readonly class PageService
         }
         $locale = strtolower(trim((string) ($data['locale'] ?? '')));
         $title = trim((string) ($data['title'] ?? ''));
+        $summary = $this->nullableText($data['summary'] ?? null);
         $content = $this->nullableText($data['content'] ?? null);
         $pageTitle = $this->nullableText($data['page_title'] ?? null);
         $metaDescription = $this->nullableText($data['meta_description'] ?? null);
@@ -134,6 +135,7 @@ final readonly class PageService
             templateKey: $templateKey,
             locale: $locale,
             title: $title,
+            summary: $summary,
             content: $content,
             pageTitle: $pageTitle,
             metaDescription: $metaDescription,
@@ -152,6 +154,7 @@ final readonly class PageService
                 $templateKey,
                 $locale,
                 $title,
+                $summary,
                 $content,
                 $pageTitle,
                 $metaDescription,
@@ -203,6 +206,7 @@ final readonly class PageService
                     pageId: $pageId,
                     locale: $locale,
                     title: $title,
+                    summary: $summary,
                     content: $content,
                     pageTitle: $pageTitle,
                     metaDescription: $metaDescription,
@@ -753,6 +757,7 @@ final readonly class PageService
         string $templateKey,
         string $locale,
         string $title,
+        ?string $summary,
         ?string $content,
         ?string $pageTitle,
         ?string $metaDescription,
@@ -768,6 +773,7 @@ final readonly class PageService
         if ($currentParentId !== $parentId
             || (string) $currentPage['template_key'] !== $templateKey
             || (string) ($existingTranslation['title'] ?? '') !== $title
+            || $this->nullableText($existingTranslation['summary'] ?? null) !== $summary
             || $this->nullableText($existingTranslation['content'] ?? null) !== $content
             || $this->nullableText($existingTranslation['page_title'] ?? null) !== $pageTitle
             || $this->nullableText($existingTranslation['meta_description'] ?? null) !== $metaDescription

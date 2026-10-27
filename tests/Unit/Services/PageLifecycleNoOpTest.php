@@ -29,6 +29,60 @@ use Psr\Log\LoggerInterface;
  */
 final class PageLifecycleNoOpTest extends TestCase
 {
+    /**
+     * Zmena perexu uklada lokalizaci a vytvari auditovanou udalost
+     */
+    public function testSummaryChangeWritesTranslationAndAudit(): void
+    {
+        $state = new PageNoOpState();
+        $page = [
+            'id' => 7,
+            'parent_id' => null,
+            'sort_order' => 0,
+            'template_key' => 'content',
+            'updated_at' => '2026-10-19 12:00:00',
+            'deleted_at' => null,
+        ];
+        $translation = [
+            'id' => 11,
+            'page_id' => 7,
+            'locale' => 'cs',
+            'title' => 'Kontakt',
+            'summary' => null,
+            'content' => null,
+            'page_title' => null,
+            'meta_description' => null,
+            'publication_state' => 1,
+            'published_at' => null,
+        ];
+        $service = $this->service($state, [
+            [$page],
+            [$translation],
+            [$page],
+            [$translation],
+            [['entity_id' => 7, 'locale' => 'cs', 'path' => 'kontakt']],
+        ]);
+
+        $service->save(AuditActor::user(3), 7, [
+            'locale' => 'cs',
+            'title' => 'Kontakt',
+            'summary' => 'Nový úvodní text',
+            'content' => '',
+            'page_title' => '',
+            'meta_description' => '',
+            'parent_id' => '',
+            'template_key' => 'content',
+            'publication_state' => '1',
+            'published_at' => '',
+        ]);
+
+        self::assertSame(1, $state->transactions);
+        self::assertTrue($state->readInsideTransaction);
+        self::assertTrue((bool) array_filter($state->domainWrites, static fn(string $sql): bool => str_contains($sql, 'summary')));
+        self::assertTrue((bool) array_filter($state->domainBindings, static fn(array $bindings): bool => in_array('Nový úvodní text', $bindings, true)));
+        self::assertCount(1, $state->auditWrites);
+    }
+
     public function testRestoreOfActivePageReturnsBeforeAuditedTransaction(): void
     {
         $state = new PageNoOpState();
@@ -207,7 +261,7 @@ final class PageLifecycleNoOpTest extends TestCase
             static fn(string $identifier): string => $identifier,
         );
         $driver->method('query')->willReturnCallback(
-            static function (string $sql) use (&$results, $state): DatabaseResultInterface|bool {
+            static function (string $sql, array $bindings = []) use (&$results, $state): DatabaseResultInterface|bool {
                 if (str_starts_with(strtolower(ltrim($sql)), 'select')) {
                     $state->readInsideTransaction = $state->readInsideTransaction || $state->insideTransaction;
                     $result = array_shift($results);
@@ -218,6 +272,7 @@ final class PageLifecycleNoOpTest extends TestCase
                     return $result;
                 }
                 $state->domainWrites[] = $sql;
+                $state->domainBindings[] = array_values($bindings);
 
                 return true;
             },
@@ -249,6 +304,9 @@ final class PageNoOpState
 
     /** @var list<string> */
     public array $domainWrites = [];
+
+    /** @var list<list<mixed>> */
+    public array $domainBindings = [];
 
     /** @var list<string> */
     public array $auditWrites = [];

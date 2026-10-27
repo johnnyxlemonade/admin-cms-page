@@ -37,9 +37,9 @@ final readonly class PageEditorValidationSchema
             ->field('title', $this->translator->get('page.fields.title'))
                 ->required($this->translator->get('page.validation.title_required'))
                 ->maxLength(180, $this->translator->get('page.validation.title_max_length'))
-            ->field('page_title', $this->translator->get('page.fields.page_title'))
+            ->field('page_title', $this->translator->get('admin.seo.page_title'))
                 ->maxLength(180, $this->translator->get('page.validation.page_title_max_length'))
-            ->field('meta_description', $this->translator->get('page.fields.meta_description'))
+            ->field('meta_description', $this->translator->get('admin.seo.meta_description'))
                 ->maxLength(255, $this->translator->get('page.validation.meta_description_max_length'))
             ->field('parent_id', $this->translator->get('page.fields.parent'))
             ->field('template_key', $this->translator->get('page.fields.template'))
@@ -47,6 +47,7 @@ final readonly class PageEditorValidationSchema
             ->field('publication_state', $this->translator->get('page.fields.publication_state'))
                 ->inList(array_keys(CmsPublicationState::editorOptionLabelKeys()), $this->translator->get('page.validation.publication_invalid'))
             ->field('published_at', $this->translator->get('page.fields.published_at'))
+            ->field('summary', $this->translator->get('page.fields.summary'))
             ->field('content', $this->translator->get('page.fields.content'))
             ->end();
     }

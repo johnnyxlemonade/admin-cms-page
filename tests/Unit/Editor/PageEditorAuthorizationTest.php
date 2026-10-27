@@ -38,6 +38,7 @@ final class PageEditorAuthorizationTest extends TestCase
         self::assertSame('cms.page.publish_own', $fields['publication_state']);
         self::assertSame('cms.page.publish_own', $fields['published_at']);
         self::assertNull($fields['title']);
+        self::assertNull($fields['summary']);
         self::assertArrayNotHasKey('owner_id', $fields);
         self::assertArrayNotHasKey('url_segment', $fields);
         self::assertArrayNotHasKey('url_segment_edited', $fields);

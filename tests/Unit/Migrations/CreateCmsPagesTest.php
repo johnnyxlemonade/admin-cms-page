@@ -59,6 +59,7 @@ final class CreateCmsPagesTest extends TestCase
         self::assertStringContainsString('CONSTRAINT `fk_cms_page_parent` FOREIGN KEY (`parent_id`)', $statements['cms_page']);
         self::assertStringContainsString('KEY `idx_cms_page_parent_order` (`parent_id`, `sort_order`, `id`)', $statements['cms_page']);
         self::assertStringContainsString('KEY `idx_cms_page_template` (`template_key`)', $statements['cms_page']);
+        self::assertStringContainsString('`summary` LONGTEXT NULL', $statements['cms_page_translation']);
         self::assertStringContainsString('UNIQUE KEY `uq_cms_page_translation_locale` (`page_id`, `locale`)', $statements['cms_page_translation']);
         self::assertStringContainsString('CONSTRAINT `fk_cms_page_translation_locale` FOREIGN KEY (`locale`)', $statements['cms_page_translation']);
         self::assertStringNotContainsString('slug', implode("\n", $statements));
