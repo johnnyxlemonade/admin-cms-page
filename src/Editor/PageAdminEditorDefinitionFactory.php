@@ -112,15 +112,18 @@ final readonly class PageAdminEditorDefinitionFactory
             new FieldColumn(
                 Field::text('title', labelKey: 'page.fields.title')
                     ->required()
+                    ->help('', 'page.fields.title_help')
                     ->attributes(['maxlength' => '180']),
                 md: 12,
             ),
             new FieldColumn(
-                Field::textarea('summary', labelKey: 'page.fields.summary'),
+                Field::textarea('summary', labelKey: 'page.fields.summary')
+                    ->help('', 'page.fields.summary_help'),
                 md: 12,
             ),
             new FieldColumn(
                 Field::textarea('content', labelKey: 'page.fields.content')
+                    ->help('', 'page.fields.content_help')
                     ->richText(imageUpload: true, fileUpload: true),
                 md: 12,
             ),
@@ -154,11 +157,13 @@ final readonly class PageAdminEditorDefinitionFactory
                 blocks: [new FieldGroupBlock([
                     new FieldColumn(
                         Field::select('parent_id', labelKey: 'page.fields.parent')
+                            ->help('', 'page.fields.parent_help')
                             ->options($parentOptions),
                         md: 6,
                     ),
                     new FieldColumn(
                         Field::select('template_key', labelKey: 'page.fields.template')
+                            ->help('', 'page.fields.template_help')
                             ->options($templateOptions),
                         md: 6,
                     ),

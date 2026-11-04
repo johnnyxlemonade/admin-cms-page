@@ -23,6 +23,8 @@ use Lemonade\Cms\Page\Actions\PageActionRegistrar;
 use Lemonade\Cms\Page\DataGrid\PageDataGrid;
 use Lemonade\Cms\Page\Models\PageModel;
 use Lemonade\Cms\Page\ModuleManifest;
+use Lemonade\Cms\Page\Template\PageTemplateDefinition;
+use Lemonade\Cms\Page\Template\PageTemplateProviderInterface;
 use Lemonade\Framework\Cache\CacheManager;
 use Lemonade\Framework\Cache\Store\ArrayCacheItemPool;
 use Lemonade\Framework\Database\Connection\ConnectionInterface;
@@ -117,6 +119,7 @@ final class PageDataGridTest extends TestCase
         self::assertSame('Kontakt', $title['value']);
         self::assertSame('/kontakt', $title['secondary'] ?? null);
         self::assertSame('/api/image/cms.page/datagrid/31', $thumbnail['url']);
+        self::assertSame('page_template.content', $row['cells']['template']);
     }
 
     /**
@@ -228,9 +231,9 @@ final class PageDataGridTest extends TestCase
 
         $row = $grid->execute($this->query(status: 'deleted'))->items()[0]->toArray();
 
-        self::assertSame(['value' => '2026-10-20 08:00:00', 'secondary' => 'Creator'], $this->stackedCell($row, 'createdAt'));
-        self::assertSame(['value' => '2026-10-21 09:00:00', 'secondary' => 'Editor'], $this->stackedCell($row, 'updatedAt'));
-        self::assertSame(['value' => '2026-10-22 10:00:00', 'secondary' => 'Deleter'], $this->stackedCell($row, 'deletedAt'));
+        self::assertSame(['value' => '20. 10. 2026 08:00', 'secondary' => 'Creator'], $this->stackedCell($row, 'createdAt'));
+        self::assertSame(['value' => '21. 10. 2026 09:00', 'secondary' => 'Editor'], $this->stackedCell($row, 'updatedAt'));
+        self::assertSame(['value' => '22. 10. 2026 10:00', 'secondary' => 'Deleter'], $this->stackedCell($row, 'deletedAt'));
     }
 
     /**
@@ -254,7 +257,7 @@ final class PageDataGridTest extends TestCase
 
         $row = $grid->execute($this->query())->items()[0]->toArray();
 
-        self::assertSame(['value' => '2026-10-22 11:00:00', 'secondary' => 'Restorer'], $this->stackedCell($row, 'updatedAt'));
+        self::assertSame(['value' => '22. 10. 2026 11:00', 'secondary' => 'Restorer'], $this->stackedCell($row, 'updatedAt'));
         self::assertSame(['value' => '—', 'secondary' => '—'], $this->stackedCell($row, 'deletedAt'));
     }
 
@@ -544,6 +547,13 @@ final class PageDataGridTest extends TestCase
             ),
         );
 
+        $templates = $this->createMock(PageTemplateProviderInterface::class);
+        $templates->method('templates')->willReturn([
+            new PageTemplateDefinition('content', 'page_template.content'),
+            new PageTemplateDefinition('auctions', 'page_template.auctions'),
+            new PageTemplateDefinition('rentals', 'page_template.rentals'),
+        ]);
+
         return new PageDataGrid(
             new PageModel($driver),
             $languages,
@@ -554,6 +564,7 @@ final class PageDataGridTest extends TestCase
             $urls,
             new AdminFileModel($driver, new FileReadModel($driver)),
             new AdminThumbnailComponent(new ImageUrlGenerator($urls, $variants)),
+            $templates,
         );
     }
 

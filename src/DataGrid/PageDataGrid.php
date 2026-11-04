@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Lemonade\Cms\Page\DataGrid;
 
+use DateTimeImmutable;
 use Lemonade\Admin\Action\Presentation\ModuleActionPresentationFactory;
 use Lemonade\Admin\Authorization\AuthorizationService;
 use Lemonade\Admin\DataGrid\Action\DataGridRowActionDefinition;
@@ -30,6 +31,7 @@ use Lemonade\Admin\Select\StaticSelectOptionSource;
 use Lemonade\Cms\CmsPublicationState;
 use Lemonade\Cms\Page\Hierarchy\PageHierarchy;
 use Lemonade\Cms\Page\Models\PageModel;
+use Lemonade\Cms\Page\Template\PageTemplateProviderInterface;
 use Lemonade\Framework\Localization\TranslatorInterface;
 use Lemonade\Framework\Routing\UrlGenerator;
 
@@ -51,6 +53,7 @@ final readonly class PageDataGrid implements DataGridProviderInterface
         private UrlGenerator $urls,
         private AdminFileModel $files,
         private AdminThumbnailComponent $thumbnails,
+        private PageTemplateProviderInterface $templates,
     ) {}
 
     /**
@@ -71,11 +74,11 @@ final readonly class PageDataGrid implements DataGridProviderInterface
             columns: [
                 new DataGridColumnDefinition('title', 'page.fields.title'),
                 new DataGridColumnDefinition('state', 'page.fields.publication_state'),
-                new DataGridColumnDefinition('template', 'page.fields.template', class: 'd-none d-lg-table-cell', configurable: true),
+                new DataGridColumnDefinition('template', 'page.fields.template', configurable: true),
                 new DataGridColumnDefinition('sortOrder', 'page.fields.sort_order', configurable: true, visibleByDefault: false),
-                new DataGridColumnDefinition('owner', 'page.fields.owner', class: 'd-none d-xl-table-cell', configurable: true),
+                new DataGridColumnDefinition('owner', 'page.fields.owner', class: 'd-none d-xl-table-cell', configurable: true, visibleByDefault: false),
                 new DataGridColumnDefinition('createdAt', 'page.fields.created_at', configurable: true, visibleByDefault: false),
-                new DataGridColumnDefinition('updatedAt', 'page.fields.updated_at', class: 'd-none d-xl-table-cell', configurable: true),
+                new DataGridColumnDefinition('updatedAt', 'page.fields.updated_at', class: 'd-none d-xl-table-cell', configurable: true, visibleByDefault: false),
                 new DataGridColumnDefinition('deletedAt', 'page.fields.deleted_at', configurable: true, visibleByDefault: false),
                 new DataGridColumnDefinition('actions', 'admin.common.actions'),
             ],
@@ -140,6 +143,10 @@ final readonly class PageDataGrid implements DataGridProviderInterface
             entityIds: array_map(static fn(array $page): int => (int) $page['id'], $rows),
             usage: 'thumbnail',
         );
+        $templateLabels = [];
+        foreach ($this->templates->templates() as $template) {
+            $templateLabels[$template->key()] = $this->translator->get($template->labelKey());
+        }
         $siblingMoves = $this->siblingMoves($allRows);
         $orderedRows = [];
         foreach ((new PageHierarchy($hierarchyRows))->preorder() as $id) {
@@ -151,6 +158,7 @@ final readonly class PageDataGrid implements DataGridProviderInterface
                     $siblingMoves[$id] ?? ['up' => false, 'down' => false],
                     $featuredImages[$id] ?? null,
                     $canViewAll || (int) ($byId[$id]['owner_id'] ?? 0) === $ownerId,
+                    $templateLabels,
                 );
             }
         }
@@ -243,6 +251,7 @@ final readonly class PageDataGrid implements DataGridProviderInterface
      * @param array<string,mixed> $page
      * @param array<string,mixed>|null $translation
      * @param array{up:bool,down:bool} $siblingMoves
+     * @param array<string,string> $templateLabels
      * @param array{
      *     id:int,
      *     module_code:string,
@@ -266,6 +275,7 @@ final readonly class PageDataGrid implements DataGridProviderInterface
         array $siblingMoves,
         ?array $featuredImage,
         bool $accessible,
+        array $templateLabels,
     ): DataGridRowDefinition {
         $pageId = (int) $page['id'];
         $deleted = $page['deleted_at'] !== null;
@@ -283,6 +293,9 @@ final readonly class PageDataGrid implements DataGridProviderInterface
         $state = $hasTranslation
             ? CmsPublicationState::tryFrom((int) $translation['publication_state']) ?? CmsPublicationState::New
             : null;
+        $templateKey = (string) ($page['template_key'] ?? '');
+        $templateLabel = $templateLabels[$templateKey]
+            ?? ($templateKey === '' ? '—' : $templateKey . ' — ' . $this->translator->get('page.editor.template_unavailable'));
 
         return new DataGridRowDefinition(
             id: $pageId,
@@ -322,7 +335,7 @@ final readonly class PageDataGrid implements DataGridProviderInterface
                         }),
                         $state === CmsPublicationState::Published ? StatusVariant::Success : StatusVariant::Muted,
                     ),
-                'template' => new ScalarCell((string) $page['template_key']),
+                'template' => new ScalarCell($templateLabel),
                 'sortOrder' => new ScalarCell((int) $page['sort_order']),
                 'owner' => new ScalarCell((string) ($page['owner_name'] ?? '—')),
                 'createdAt' => $this->auditMetadataCell($page['created_at'] ?? null, $page['created_by_name'] ?? null),
@@ -466,9 +479,30 @@ final readonly class PageDataGrid implements DataGridProviderInterface
         $actor = trim((string) $actor);
 
         return new StackedCell(
-            value: $date === '' ? '—' : $date,
+            value: $this->formatDateTime($date),
             secondary: $date === '' || $actor === '' ? '—' : $actor,
         );
+    }
+
+    /**
+     * Zobrazi datum bez sekund podle jazyka administrace
+     */
+    private function formatDateTime(mixed $value): string
+    {
+        $text = trim((string) $value);
+        if ($text === '') {
+            return '—';
+        }
+
+        $date = DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $text);
+        if ($date === false) {
+            return $text;
+        }
+
+        return $date->format(match ($this->translator->locale()) {
+            'en' => 'M j, Y H:i',
+            default => 'd. m. Y H:i',
+        });
     }
 
     /**
