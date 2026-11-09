@@ -91,8 +91,12 @@ final class PageAdminEditorDefinitionFactoryTest extends TestCase
         self::assertSame('admin.seo.section_help', $seoSection->descriptionKey());
         $seoFields = $seoSection->blocks()[0];
         self::assertInstanceOf(FieldGroupBlock::class, $seoFields);
-        self::assertSame('admin.seo.page_title_help', $seoFields->columns()[0]->field()->helpTranslationKey());
-        self::assertSame('admin.seo.meta_description_help', $seoFields->columns()[1]->field()->helpTranslationKey());
+        $pageTitleField = $seoFields->columns()[0]->field();
+        $descriptionField = $seoFields->columns()[1]->field();
+        self::assertInstanceOf(AdminEditorFieldDefinition::class, $pageTitleField);
+        self::assertInstanceOf(AdminEditorFieldDefinition::class, $descriptionField);
+        self::assertSame('admin.seo.page_title_help', $pageTitleField->helpTranslationKey());
+        self::assertSame('admin.seo.meta_description_help', $descriptionField->helpTranslationKey());
 
         $settingsSection = $editor->tabs()[2]->blocks()[0];
         self::assertInstanceOf(SectionBlock::class, $settingsSection);
@@ -100,7 +104,11 @@ final class PageAdminEditorDefinitionFactoryTest extends TestCase
         self::assertInstanceOf(FieldGroupBlock::class, $settingsFields);
         self::assertSame(
             ['parent_id', 'template_key'],
-            array_map(static fn($column): string => $column->field()->name(), $settingsFields->columns()),
+            array_map(static function ($column): string {
+                $field = $column->field();
+                self::assertInstanceOf(AdminEditorFieldDefinition::class, $field);
+                return $field->name();
+            }, $settingsFields->columns()),
         );
         $urlField = $seoFields->columns()[2]->field();
         self::assertInstanceOf(UrlSegmentField::class, $urlField);
@@ -214,7 +222,9 @@ final class PageAdminEditorDefinitionFactoryTest extends TestCase
                         $names[] = $block->name();
                     } elseif ($block instanceof FieldGroupBlock) {
                         foreach ($block->columns() as $column) {
-                            $names[] = $column->field()->name();
+                            $field = $column->field();
+                            self::assertInstanceOf(AdminEditorFieldDefinition::class, $field);
+                            $names[] = $field->name();
                         }
                     }
                 }
@@ -228,7 +238,9 @@ final class PageAdminEditorDefinitionFactoryTest extends TestCase
         self::assertInstanceOf(SectionBlock::class, $contentSection);
         $contentFields = $contentSection->blocks()[0];
         self::assertInstanceOf(FieldGroupBlock::class, $contentFields);
-        self::assertSame('en', $contentFields->columns()[0]->field()->structuralDefaultValue());
+        $localeField = $contentFields->columns()[0]->field();
+        self::assertInstanceOf(AdminEditorFieldDefinition::class, $localeField);
+        self::assertSame('en', $localeField->structuralDefaultValue());
         foreach ([3 => 'gallery', 4 => 'attachments'] as $index => $id) {
             $section = $editor->tabs()[$index]->blocks()[0];
             self::assertInstanceOf(SectionBlock::class, $section);
@@ -244,7 +256,11 @@ final class PageAdminEditorDefinitionFactoryTest extends TestCase
         self::assertSame(['publication', 'ownership', 'thumbnail'], array_map(static fn($panel): string => $panel->id(), $panels));
         $publicationFields = $panels[0]->blocks()[0];
         self::assertInstanceOf(FieldGroupBlock::class, $publicationFields);
-        self::assertSame(['publication_state', 'published_at'], array_map(static fn($column): string => $column->field()->name(), $publicationFields->columns()));
+        self::assertSame(['publication_state', 'published_at'], array_map(static function ($column): string {
+            $field = $column->field();
+            self::assertInstanceOf(AdminEditorFieldDefinition::class, $field);
+            return $field->name();
+        }, $publicationFields->columns()));
         self::assertInstanceOf(SelectField::class, $publicationFields->columns()[0]->field());
         self::assertSame('page.editor.sections.publication_help', $panels[0]->descriptionKey());
         $auditView = $panels[1]->blocks()[0];
