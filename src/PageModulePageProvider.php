@@ -131,6 +131,7 @@ final readonly class PageModulePageProvider implements ModuleIndexPageProviderIn
         $locales = $editor->data()['locales'];
         $selected = $this->resolveContentLocale($locales, $query);
         $page = $editor->data()['page'];
+        $otherPublishedLocale = array_filter($page['translations'], static fn(array $translation): bool => $translation['locale'] !== $selected['code'] && (int) $translation['publication_state'] === CmsPublicationState::Published->value) !== [];
         $page['translations'] = array_values(array_filter(
             $page['translations'],
             static fn(array $translation): bool => $translation['locale'] === $selected['code'],
@@ -150,6 +151,7 @@ final readonly class PageModulePageProvider implements ModuleIndexPageProviderIn
             data: [
                 'adminEditor' => $this->adminEditorDefinitions->create(
                     page: $page,
+                    otherPublishedLocale: $otherPublishedLocale,
                     contentLocale: $selected['code'],
                     canPublish: $this->authorization->canForOwner(
                         'cms.page.publish',
@@ -329,7 +331,7 @@ final readonly class PageModulePageProvider implements ModuleIndexPageProviderIn
      */
     private function templateOptions(string $currentTemplateKey): array
     {
-        $options = [];
+        $options = ['' => $this->translator->get('page.editor.template_none')];
         foreach ($this->templates->templates() as $template) {
             $options[$template->key()] = $this->translator->get($template->labelKey());
         }

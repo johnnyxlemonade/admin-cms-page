@@ -21,7 +21,7 @@ final class PagePublicationPlanResolverTest extends TestCase
      */
     #[DataProvider('publicationCases')]
     public function testResolvesPublicationPlan(
-        CmsPublicationState $requested,
+        ?CmsPublicationState $requested,
         string $input,
         ?array $existing,
         CmsPublicationState $expectedState,
@@ -45,12 +45,12 @@ final class PagePublicationPlanResolverTest extends TestCase
     /**
      * Poskytne create, publish, edit a unpublish lifecycle scenare
      *
-     * @return iterable<string,array{CmsPublicationState,string,array<string,mixed>|null,CmsPublicationState,string|null,bool,bool}>
+     * @return iterable<string,array{CmsPublicationState|null,string,array<string,mixed>|null,CmsPublicationState,string|null,bool,bool}>
      */
     public static function publicationCases(): iterable
     {
         yield 'first save promotes new to draft' => [
-            CmsPublicationState::New,
+            null,
             '',
             ['publication_state' => CmsPublicationState::New->value, 'published_at' => null],
             CmsPublicationState::Draft,
@@ -97,6 +97,15 @@ final class PagePublicationPlanResolverTest extends TestCase
         yield 'ordinary edit preserves published metadata' => [
             CmsPublicationState::Published,
             '2026-10-18T10:30',
+            ['publication_state' => CmsPublicationState::Published->value, 'published_at' => '2026-10-18 10:30:00'],
+            CmsPublicationState::Published,
+            '2026-10-18 10:30:00',
+            false,
+            false,
+        ];
+        yield 'omitted state preserves published metadata' => [
+            null,
+            '',
             ['publication_state' => CmsPublicationState::Published->value, 'published_at' => '2026-10-18 10:30:00'],
             CmsPublicationState::Published,
             '2026-10-18 10:30:00',

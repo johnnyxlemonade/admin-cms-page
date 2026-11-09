@@ -58,8 +58,7 @@ final class PageLifecycleNoOpTest extends TestCase
         $service = $this->service($state, [
             [$page],
             [$translation],
-            [$page],
-            [$translation],
+            [],
             [['entity_id' => 7, 'locale' => 'cs', 'path' => 'kontakt']],
         ]);
 

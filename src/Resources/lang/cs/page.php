@@ -72,6 +72,7 @@ return [
     ],
 
     'editor' => [
+        'template_none' => 'Bez šablony',
         'title' => 'Upravit stránku',
         'publication' => 'Publikace',
         'ownership' => 'Autorství a vlastnictví',

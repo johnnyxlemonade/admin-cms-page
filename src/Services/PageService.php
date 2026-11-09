@@ -12,6 +12,9 @@ use Lemonade\Admin\Event\TransactionalEventProcessor;
 use Lemonade\Admin\Identity\LocalUserDirectory;
 use Lemonade\Admin\Localization\LanguageRegistry;
 use Lemonade\Cms\CmsPublicationState;
+use Lemonade\Cms\Content\CmsContentInput;
+use Lemonade\Cms\Content\CmsContentValidation;
+use Lemonade\Cms\Content\CmsContentValidationException;
 use Lemonade\Cms\Page\Hierarchy\PageHierarchy;
 use Lemonade\Cms\Page\Models\PageModel;
 use Lemonade\Cms\Page\Publication\PagePublicationPlanResolver;
@@ -45,23 +48,21 @@ final readonly class PageService
     ) {}
 
     /**
-     * Vytvori minimalni draft ve vychozim locale a prvni host sablone
+     * Vytvori minimalni draft ve vychozim locale bez povinne sablony
      */
     public function createDraft(AuditActor $actor, string $locale): int
     {
         if (!$this->enabledLocale($locale)) {
-            throw new DomainException('page.validation.locale_invalid');
+            throw new CmsContentValidationException(['locale' => 'page.validation.locale_invalid']);
         }
-        $templates = $this->templates->templates();
-        $template = $templates[0] ?? throw new DomainException('page.validation.template_invalid');
 
         return $this->events->execute(
             $actor,
-            function (TransactionalEventCollector $events) use ($actor, $locale, $template): int {
+            function (TransactionalEventCollector $events) use ($actor, $locale): int {
                 $pageId = $this->pages->createDraft(
                     userId: $this->actorUserId($actor),
                     locale: $locale,
-                    templateKey: $template->key(),
+                    templateKey: '',
                     now: date('Y-m-d H:i:s'),
                 );
                 if ($pageId < 1) {
@@ -81,74 +82,23 @@ final readonly class PageService
      */
     public function save(AuditActor $actor, int $pageId, array $data): void
     {
-        $currentPage = $this->pages->page($pageId);
-        if ($currentPage === null) {
-            throw new DomainException('page.validation.not_found');
-        }
-        $locale = strtolower(trim((string) ($data['locale'] ?? '')));
-        $title = trim((string) ($data['title'] ?? ''));
-        $summary = $this->nullableText($data['summary'] ?? null);
-        $content = $this->nullableText($data['content'] ?? null);
-        $pageTitle = $this->nullableText($data['page_title'] ?? null);
-        $metaDescription = $this->nullableText($data['meta_description'] ?? null);
+        $input = CmsContentInput::fromEditor($data);
+        $locale = $input->locale;
+        $title = $input->title;
+        $summary = $input->summary;
+        $content = $input->content;
+        $pageTitle = $input->pageTitle;
+        $metaDescription = $input->metaDescription;
         $parentId = $this->nullablePositiveInt($data['parent_id'] ?? null);
-        $templateKey = trim((string) ($data['template_key'] ?? ''));
-        if ($title === '') {
-            throw new DomainException('page.validation.title_required');
-        }
-        if (mb_strlen($title) > 180) {
-            throw new DomainException('page.validation.title_max_length');
-        }
-
-        $existingTranslation = $this->pages->translation($pageId, $locale);
-        if ($existingTranslation === null && !$this->enabledLocale($locale)) {
-            throw new DomainException('page.validation.locale_invalid');
-        }
-        $currentState = CmsPublicationState::tryFrom(
-            (int) ($existingTranslation['publication_state'] ?? CmsPublicationState::Draft->value),
-        ) ?? CmsPublicationState::Draft;
-        $requestedState = array_key_exists('publication_state', $data)
-            ? CmsPublicationState::tryFrom((int) $data['publication_state'])
-            : $currentState;
-        if ($requestedState === null) {
-            throw new DomainException('page.validation.publication_invalid');
-        }
-        $publishedAtInput = array_key_exists('published_at', $data)
-            ? (string) $data['published_at']
-            : (string) ($existingTranslation['published_at'] ?? '');
-        $publication = $this->publicationPlans->resolve(
-            $requestedState,
-            $publishedAtInput,
-            $existingTranslation,
-            date('Y-m-d H:i:s'),
-        );
-        $this->assertTemplateCanBeSaved(
-            requestedTemplateKey: $templateKey,
-            currentTemplateKey: (string) $currentPage['template_key'],
-            publicationState: $publication->state,
-        );
-        if ($this->isSaveNoOp(
-            pageId: $pageId,
-            currentPage: $currentPage,
-            existingTranslation: $existingTranslation,
-            parentId: $parentId,
-            templateKey: $templateKey,
-            locale: $locale,
-            title: $title,
-            summary: $summary,
-            content: $content,
-            pageTitle: $pageTitle,
-            metaDescription: $metaDescription,
-            publicationState: $publication->state,
-            publishedAt: $publication->publishedAt,
-        )) {
-            return;
-        }
+        $templateKey = CmsContentValidation::texts($data, ['template_key'])['template_key'] ?? '';
+        $requestedState = $input->hasPublication ? CmsPublicationState::from((int) $input->publicationState) : null;
+        $publishedAtInput = (string) $input->publishedAt;
 
         $this->events->execute(
             $actor,
             function (TransactionalEventCollector $events) use (
                 $actor,
+                $input,
                 $pageId,
                 $parentId,
                 $templateKey,
@@ -168,7 +118,7 @@ final readonly class PageService
                 $currentPage = $this->treeRow($treeRows, $pageId);
                 $existingTranslation = $this->pages->translationForUpdate($pageId, $locale);
                 if ($existingTranslation === null && !$this->enabledLocale($locale)) {
-                    throw new DomainException('page.validation.locale_invalid');
+                    throw new CmsContentValidationException(['locale' => 'page.validation.locale_invalid']);
                 }
                 $publication = $this->publicationPlans->resolve(
                     $requestedState,
@@ -176,14 +126,30 @@ final readonly class PageService
                     $existingTranslation,
                     $now,
                 );
-                $this->assertTemplateCanBeSaved(
-                    requestedTemplateKey: $templateKey,
-                    currentTemplateKey: (string) $currentPage['template_key'],
-                    publicationState: $publication->state,
-                );
+                $errors = CmsContentValidation::content($input, $publication->state, 'page');
+                try {
+                    $this->assertTemplateCanBeSaved($templateKey, (string) $currentPage['template_key'], $publication->state);
+                } catch (CmsContentValidationException $exception) {
+                    $errors += $exception->errors();
+                }
+                CmsContentValidation::assert($errors);
+                foreach ($this->pages->publishedTranslations($pageId) as $published) {
+                    if ($published['locale'] === $locale) {
+                        continue;
+                    }
+                    $this->assertTemplateCanBeSaved($templateKey, (string) $currentPage['template_key'], CmsPublicationState::Published);
+                    $this->assertPublication(
+                        $pageId,
+                        (string) $published['locale'],
+                        $parentId,
+                        CmsPublicationState::Published,
+                        $published['published_at'] === null ? null : (string) $published['published_at'],
+                        $tree->descendantIds($pageId),
+                    );
+                }
                 $currentParentId = $currentPage['parent_id'] === null ? null : (int) $currentPage['parent_id'];
                 $subtreeIds = $tree->descendantIds($pageId);
-                $this->updateSubtreeRoutes(
+                $routesChanged = $this->updateSubtreeRoutes(
                     pageId: $pageId,
                     oldParentId: $currentParentId,
                     newParentId: $parentId,
@@ -192,6 +158,26 @@ final readonly class PageService
                     title: $title,
                     subtreeIds: $subtreeIds,
                 );
+                $this->assertPublication($pageId, $locale, $parentId, $publication->state, $publication->publishedAt, $subtreeIds);
+                if (!$routesChanged && $this->isSaveNoOp(
+                    pageId: $pageId,
+                    currentPage: $currentPage,
+                    existingTranslation: $existingTranslation,
+                    parentId: $parentId,
+                    templateKey: $templateKey,
+                    locale: $locale,
+                    title: $title,
+                    summary: $summary,
+                    content: $content,
+                    pageTitle: $pageTitle,
+                    metaDescription: $metaDescription,
+                    publicationState: $publication->state,
+                    publishedAt: $publication->publishedAt,
+                )) {
+                    $events->noOp();
+
+                    return;
+                }
                 $sortOrder = $currentParentId === $parentId
                     ? (int) $currentPage['sort_order']
                     : $this->moveToSiblingEnd($pageId, $currentParentId, $parentId, $treeRows, $now);
@@ -214,15 +200,7 @@ final readonly class PageService
                     translationId: isset($existingTranslation['id']) ? (int) $existingTranslation['id'] : null,
                 );
                 if ($publication->changed) {
-                    $this->savePublication(
-                        pageId: $pageId,
-                        locale: $locale,
-                        parentId: $parentId,
-                        state: $publication->state,
-                        publishedAt: $publication->publishedAt,
-                        now: $now,
-                        subtreeIds: $subtreeIds,
-                    );
+                    $this->pages->savePublication($pageId, $locale, $publication->state, $publication->publishedAt, $now);
                 }
                 $this->pages->touchUpdatedBy($pageId, $this->actorUserId($actor), $now);
                 $events->record(new DomainEvent(
@@ -267,7 +245,7 @@ final readonly class PageService
                 $page = $this->treeRow($treeRows, $pageId);
                 $translation = $this->pages->translationForUpdate($pageId, $locale);
                 if ($translation === null && !$this->enabledLocale($locale)) {
-                    throw new DomainException('page.validation.locale_invalid');
+                    throw new CmsContentValidationException(['locale' => 'page.validation.locale_invalid']);
                 }
                 $parentId = $page['parent_id'] === null ? null : (int) $page['parent_id'];
                 $changed = $this->updateSubtreeRoutes(
@@ -367,7 +345,7 @@ final readonly class PageService
                     }
                 }
                 if (!$parentExists) {
-                    throw new DomainException('page.validation.parent_invalid');
+                    throw new CmsContentValidationException(['parent_id' => 'page.validation.parent_invalid']);
                 }
                 $now = date('Y-m-d H:i:s');
                 $this->pages->restoreDraft($pageId, $this->actorUserId($actor), $now);
@@ -479,16 +457,16 @@ final readonly class PageService
 
         $currentPath = $rootRoutes[$locale] ?? null;
         $segment = $explicitSegment
-            ?? ($currentPath === null ? $this->slugger->slug($title, 180, $locale) : basename($currentPath));
+            ?? ($currentPath === null ? ($title === '' ? null : $this->slugger->slug($title, 180, $locale)) : basename($currentPath));
         if ($segment === '') {
-            throw new DomainException('admin.url_segment.invalid');
+            throw new CmsContentValidationException(['url_segment' => 'admin.url_segment.invalid']);
         }
 
         $parentChanged = $oldParentId !== $newParentId;
         $segmentChanged = $currentPath !== null && basename($currentPath) !== $segment;
         $prefixes = [];
         foreach ($rootRoutes as $routeLocale => $oldPrefix) {
-            $leaf = $routeLocale === $locale ? $segment : basename($oldPrefix);
+            $leaf = $routeLocale === $locale && $segment !== null ? $segment : basename($oldPrefix);
             $prefixes[$routeLocale] = [
                 'old' => $oldPrefix,
                 'new' => $this->pathUnderParent($newParentId, $routeLocale, $leaf),
@@ -502,7 +480,7 @@ final readonly class PageService
                     static fn(array $route): bool => $route['locale'] === $locale,
                 ));
             if ($routesToReplace === []) {
-                throw new DomainException('page.validation.route_inconsistent');
+                throw new CmsContentValidationException(['url_segment' => 'page.validation.route_inconsistent']);
             }
             try {
                 $this->routes->replaceExplicitBatch(
@@ -514,8 +492,8 @@ final readonly class PageService
             }
         }
 
-        if ($currentPath !== null) {
-            return $parentChanged || $segmentChanged;
+        if ($currentPath !== null || $segment === null) {
+            return ($parentChanged && $routeRows !== []) || $segmentChanged;
         }
         $path = $this->pathUnderParent($newParentId, $locale, $segment);
         try {
@@ -602,7 +580,7 @@ final readonly class PageService
         }
         $parentPath = $this->pages->routePath($parentId, $locale);
         if ($parentPath === null) {
-            throw new DomainException('page.validation.parent_locale_route_missing');
+            throw new CmsContentValidationException(['parent_id' => 'page.validation.parent_locale_route_missing']);
         }
 
         return $parentPath . '/' . $segment;
@@ -615,29 +593,28 @@ final readonly class PageService
     {
         $value = trim($value, '/');
         if ($value === '' || str_contains($value, '/')) {
-            throw new DomainException('admin.url_segment.invalid');
+            throw new CmsContentValidationException(['url_segment' => 'admin.url_segment.invalid']);
         }
 
         $value = $this->slugger->slug($value, 180, $locale);
         if ($value === '') {
-            throw new DomainException('admin.url_segment.invalid');
+            throw new CmsContentValidationException(['url_segment' => 'admin.url_segment.invalid']);
         }
 
         return $value;
     }
 
     /**
-     * Ulozi publication stav se zachovanim hierarchicke dostupnosti
+     * Overi hierarchickou dostupnost i pri nezmenene publikaci
      *
      * @param list<int> $subtreeIds
      */
-    private function savePublication(
+    private function assertPublication(
         int $pageId,
         string $locale,
         ?int $parentId,
         CmsPublicationState $state,
         ?string $publishedAt,
-        string $now,
         array $subtreeIds,
     ): void {
         $descendantIds = array_values(array_filter(
@@ -647,11 +624,11 @@ final readonly class PageService
         if ($state !== CmsPublicationState::Published
             && $this->pages->hasPublishedDescendants($descendantIds, $locale)
         ) {
-            throw new DomainException('page.validation.unpublish_has_published_children');
+            throw new CmsContentValidationException(['publication_state' => 'page.validation.unpublish_has_published_children']);
         }
         if ($state === CmsPublicationState::Published) {
             if (!$this->routes->hasReservation('cms.page', $pageId, $locale)) {
-                throw new DomainException('page.validation.url_required');
+                throw new CmsContentValidationException(['url_segment' => 'page.validation.url_required']);
             }
             if ($parentId !== null) {
                 $parent = $this->pages->translation($parentId, $locale);
@@ -661,11 +638,10 @@ final readonly class PageService
                     || $publishedAt === null
                     || (string) $parent['published_at'] > $publishedAt
                 ) {
-                    throw new DomainException('page.validation.parent_not_published');
+                    throw new CmsContentValidationException(['parent_id' => 'page.validation.parent_not_published']);
                 }
             }
         }
-        $this->pages->savePublication($pageId, $locale, $state, $publishedAt, $now);
     }
 
     /**
@@ -673,12 +649,12 @@ final readonly class PageService
      */
     private function pageRouteValidation(CmsRouteValidationException $exception): DomainException
     {
-        return new DomainException(match ($exception->getMessage()) {
+        return new CmsContentValidationException(['url_segment' => match ($exception->getMessage()) {
             'cms.route.path_reserved' => 'admin.url_segment.reserved',
             'cms.route.path_occupied' => 'admin.url_segment.occupied',
             'cms.route.path_invalid' => 'admin.url_segment.invalid',
             default => 'page.validation.route_inconsistent',
-        }, previous: $exception);
+        }]);
     }
 
     /**
@@ -690,7 +666,7 @@ final readonly class PageService
             return null;
         }
         if (!is_string($value) || preg_match('/^page-([1-9][0-9]*)$/D', $value, $matches) !== 1) {
-            throw new DomainException('page.validation.parent_invalid');
+            throw new CmsContentValidationException(['parent_id' => 'page.validation.parent_invalid']);
         }
 
         return (int) $matches[1];
@@ -734,17 +710,17 @@ final readonly class PageService
             }
         }
 
-        if ($requestedTemplateKey === $currentTemplateKey
+        if (($requestedTemplateKey === '' || $requestedTemplateKey === $currentTemplateKey)
             && $publicationState !== CmsPublicationState::Published
         ) {
             return;
         }
 
-        throw new DomainException('page.validation.template_invalid');
+        throw new CmsContentValidationException(['template_key' => 'page.validation.template_invalid']);
     }
 
     /**
-     * Rozpozna skutecne nezmeneny save pred otevrenim auditovane write transakce
+     * Rozpozna skutecne nezmeneny save ze zamceneho snapshotu
      *
      * @param array<string,mixed> $currentPage
      * @param array<string,mixed>|null $existingTranslation
@@ -784,7 +760,7 @@ final readonly class PageService
         }
 
         $currentPath = $this->pages->routePath($pageId, $locale);
-        if ($currentPath === null) {
+        if ($currentPath === null && ($title !== '' || $publicationState === CmsPublicationState::Published)) {
             return false;
         }
 

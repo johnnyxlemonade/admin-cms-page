@@ -6,6 +6,8 @@ namespace Lemonade\Cms\Page\Tests\Unit\Services;
 
 use DomainException;
 use Lemonade\Admin\Audit\AuditActor;
+use Lemonade\Admin\Audit\AuditLogWriterInterface;
+use Lemonade\Admin\Event\DomainEventDispatcher;
 use Lemonade\Admin\Event\TransactionalEventProcessor;
 use Lemonade\Admin\Identity\LocalUserDirectory;
 use Lemonade\Admin\Localization\LanguageRegistry;
@@ -31,9 +33,9 @@ use PHPUnit\Framework\TestCase;
 final class PageServiceValidationTest extends TestCase
 {
     /**
-     * Skutecny no-op neotevre auditovanou transakci ani neprovede write
+     * Skutecny no-op overi zamceny obsah bez zapisu a auditu
      */
-    public function testNoOpSaveWithoutPublicationInputDoesNotEnterAuditedMutation(): void
+    public function testNoOpSaveWithoutPublicationInputDoesNotWriteOrAudit(): void
     {
         $translation = $this->translation();
         $translation['summary'] = 'Úvodní text';
@@ -47,8 +49,6 @@ final class PageServiceValidationTest extends TestCase
         unset($payload['publication_state'], $payload['published_at']);
 
         $service->save(AuditActor::user(1), 7, $payload);
-
-        self::expectNotToPerformAssertions();
     }
 
     /**
@@ -63,12 +63,10 @@ final class PageServiceValidationTest extends TestCase
         );
 
         $service->save(AuditActor::user(1), 7, $this->payload(locale: 'de'));
-
-        self::expectNotToPerformAssertions();
     }
 
     /**
-     * Nova mutace v disabled locale se odmita pred zahajenim write transakce
+     * Nova mutace v disabled locale se odmita pred prvnim zapisem
      */
     public function testNewDisabledLocaleIsRejected(): void
     {
@@ -100,8 +98,6 @@ final class PageServiceValidationTest extends TestCase
             7,
             $this->payload(templateKey: 'removed-template'),
         );
-
-        self::expectNotToPerformAssertions();
     }
 
     /**
@@ -147,6 +143,35 @@ final class PageServiceValidationTest extends TestCase
     }
 
     /**
+     * Koncept bez titulku, sablony a URL je platny nezmeneny obsah
+     */
+    public function testEmptyDraftWithoutTemplateOrRouteIsNoOp(): void
+    {
+        $translation = $this->translation();
+        $translation['title'] = '';
+        $service = $this->service('', $translation, null);
+        $payload = $this->payload(templateKey: '');
+        $payload['title'] = '';
+        $service->save(AuditActor::user(1), 7, $payload);
+    }
+
+    /**
+     * Publikace vrati chyby titulku a sablony soucasne
+     */
+    public function testPublicationRequiresTitleAndTemplate(): void
+    {
+        $service = $this->service('', $this->translation(), null);
+        $payload = $this->payload(templateKey: '', publicationState: 2);
+        $payload['title'] = '';
+        try {
+            $service->save(AuditActor::user(1), 7, $payload);
+            self::fail('Incomplete page published');
+        } catch (\Lemonade\Cms\Content\CmsContentValidationException $exception) {
+            self::assertSame(['title', 'template_key'], array_keys($exception->errors()));
+        }
+    }
+
+    /**
      * @param array<string,mixed>|null $translation
      */
     private function service(
@@ -154,72 +179,49 @@ final class PageServiceValidationTest extends TestCase
         ?array $translation,
         ?string $routePath,
     ): PageService {
-        $rows = [
-            [
-                'id' => 7,
-                'parent_id' => null,
-                'sort_order' => 0,
-                'template_key' => $currentTemplate,
-                'deleted_at' => null,
-            ],
-            $translation,
-        ];
-        if ($translation !== null) {
-            $rows[] = $routePath === null ? null : ['path' => $routePath];
-        }
-        $driver = $this->driver($rows);
-        $connection = $this->createMock(ConnectionInterface::class);
-        $connection->method('select')->willReturnCallback(
-            static function (string $sql): array {
-                if (str_contains($sql, 'system_language')) {
-                    return [['code' => 'cs', 'name' => 'Cestina', 'is_default' => 1]];
-                }
+        $page = ['id' => 7, 'parent_id' => null, 'sort_order' => 0, 'template_key' => $currentTemplate, 'deleted_at' => null];
+        $driver = $this->createMock(DatabaseDriverInterface::class);
+        $driver->method('protect_identifiers')->willReturnCallback(static fn(string $identifier): string => $identifier);
+        $driver->method('query')->willReturnCallback(function (string $sql) use ($page, $translation, $routePath): DatabaseResultInterface {
+            self::assertStringStartsWith('SELECT', $sql, 'Validation and no-op saves must not write');
+            if (str_contains($sql, 'cms_page_translation')) {
+                $rows = str_contains($sql, 'publication_state =') || $translation === null ? [] : [$translation];
+            } elseif (str_contains($sql, 'cms_route')) {
+                $rows = $routePath === null ? [] : [['entity_id' => 7, 'locale' => $translation['locale'] ?? 'cs', 'path' => $routePath]];
+            } else {
+                $rows = [$page];
+            }
+            $result = $this->createMock(DatabaseResultInterface::class);
+            $result->method('result_array')->willReturn($rows);
+            $result->method('row_array')->willReturn($rows[0] ?? null);
 
-                return [['allowed' => 1]];
-            },
-        );
+            return $result;
+        });
+        $connection = $this->createMock(ConnectionInterface::class);
+        $connection->method('transaction')->willReturnCallback(static fn(callable $callback): mixed => $callback());
+        $connection->expects(self::never())->method('statement');
+        $connection->method('select')->willReturnCallback(static function (string $sql) use ($routePath): array {
+            if (str_contains($sql, 'system_language')) {
+                return [['code' => 'cs', 'name' => 'Cestina', 'is_default' => 1]];
+            }
+            return $routePath === null ? [] : [['path' => $routePath]];
+        });
         $database = new Database($connection, $driver);
+
+        $audit = $this->createMock(AuditLogWriterInterface::class);
+        $audit->expects(self::never())->method('record');
 
         return new PageService(
             pages: new PageModel($driver),
             languages: new LanguageRegistry($database, new CacheManager(new ArrayCacheItemPool())),
             routes: $this->instanceWithoutConstructor(CmsRouteReservationService::class),
             slugger: new Slugger(),
-            events: $this->instanceWithoutConstructor(TransactionalEventProcessor::class),
+            events: new TransactionalEventProcessor($database, $audit, new DomainEventDispatcher(new \Psr\Log\NullLogger())),
             templates: new PageServiceTemplateProviderStub(),
             subtreeRoutes: new PageSubtreeRouteMapper(),
             publicationPlans: new PagePublicationPlanResolver(),
             users: new LocalUserDirectory($database),
         );
-    }
-
-    /**
-     * @param list<array<string,mixed>|null> $rows
-     */
-    private function driver(array $rows): DatabaseDriverInterface
-    {
-        $results = [];
-        foreach ($rows as $row) {
-            $result = $this->createMock(DatabaseResultInterface::class);
-            $result->method('result_array')->willReturn($row === null ? [] : [$row]);
-            $results[] = $result;
-        }
-        $driver = $this->createMock(DatabaseDriverInterface::class);
-        $driver->method('protect_identifiers')->willReturnCallback(
-            static fn(string $identifier): string => $identifier,
-        );
-        $driver->method('query')->willReturnCallback(
-            static function () use (&$results): DatabaseResultInterface {
-                $result = array_shift($results);
-                if (!$result instanceof DatabaseResultInterface) {
-                    throw new \LogicException('No-op save attempted an unexpected database operation.');
-                }
-
-                return $result;
-            },
-        );
-
-        return $driver;
     }
 
     /**

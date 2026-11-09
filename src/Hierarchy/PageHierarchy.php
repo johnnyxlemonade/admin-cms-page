@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Lemonade\Cms\Page\Hierarchy;
 
-use DomainException;
+use Lemonade\Cms\Content\CmsContentValidationException;
 
 /**
  * Vyhodnocuje stromove invarianty nad jednim snapshotem stranek
@@ -61,17 +61,17 @@ final class PageHierarchy
     public function assertMove(int $pageId, ?int $parentId): void
     {
         if (!array_key_exists($pageId, $this->parents)) {
-            throw new DomainException('page.validation.not_found');
+            throw new \DomainException('page.validation.not_found');
         }
         if ($parentId === null) {
             return;
         }
         if (!array_key_exists($parentId, $this->parents)) {
-            throw new DomainException('page.validation.parent_invalid');
+            throw new CmsContentValidationException(['parent_id' => 'page.validation.parent_invalid']);
         }
         $this->ancestorIds($parentId);
         if ($parentId === $pageId || in_array($parentId, $this->descendantIds($pageId), true)) {
-            throw new DomainException('page.validation.parent_cycle');
+            throw new CmsContentValidationException(['parent_id' => 'page.validation.parent_cycle']);
         }
     }
 
@@ -89,7 +89,7 @@ final class PageHierarchy
         $visited = [];
         $visit = function (int $id) use (&$visit, &$result, &$visited): void {
             if (isset($visited[$id])) {
-                throw new DomainException('page.validation.parent_cycle');
+                throw new CmsContentValidationException(['parent_id' => 'page.validation.parent_cycle']);
             }
             $visited[$id] = true;
             $result[] = $id;
@@ -117,7 +117,7 @@ final class PageHierarchy
         $parentId = $this->parents[$pageId];
         while ($parentId !== null) {
             if (isset($visited[$parentId])) {
-                throw new DomainException('page.validation.parent_cycle');
+                throw new CmsContentValidationException(['parent_id' => 'page.validation.parent_cycle']);
             }
             $visited[$parentId] = true;
             $ancestors[] = $parentId;

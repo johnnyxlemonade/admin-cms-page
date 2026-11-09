@@ -608,6 +608,20 @@ final class PageModel extends Model
     }
 
     /**
+     * Vrati publikovane mutace pro kontrolu sdileneho rodice a sablony
+     *
+     * @return list<array<string,mixed>>
+     */
+    public function publishedTranslations(int $pageId): array
+    {
+        return $this->translations()
+            ->select(['locale', 'published_at'])
+            ->where('page_id', $pageId)
+            ->where('publication_state', CmsPublicationState::Published->value)
+            ->getArray();
+    }
+
+    /**
      * Rozhodne, zda ma stranka publikovane potomky v locale
      *
      * @param list<int> $descendantIds

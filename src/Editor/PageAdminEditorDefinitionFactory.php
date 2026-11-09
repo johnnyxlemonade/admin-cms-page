@@ -57,6 +57,7 @@ final readonly class PageAdminEditorDefinitionFactory
         ?AdminFileUploadCollection $featuredImageUpload = null,
         ?AdminFileUploadCollection $galleryUpload = null,
         ?AdminFileUploadCollection $attachmentUpload = null,
+        bool $otherPublishedLocale = false,
     ): AdminEditorDefinition {
         $translation = $page['translations'][0] ?? [];
         $indexUrl = $this->urls->route($this->routes->managementRouteName('pages', 'index'), ['module' => 'pages']);
@@ -64,9 +65,9 @@ final readonly class PageAdminEditorDefinitionFactory
             ->form($this->form((int) $page['id'], $contentLocale))
             ->header(CmsEditorHeader::create('page', $indexUrl, $context))
             ->saveBar(CmsEditorSaveBar::create())
-            ->tab($this->contentTab($contentLocale))
+            ->tab($this->contentTab($contentLocale, (int) ($translation['publication_state'] ?? 0), $canPublish))
             ->tab(SeoSection::tab(pathPrefix: $this->urlPrefix($translation), autoGenerateUrl: trim((string) ($translation['canonical_path'] ?? '')) === ''))
-            ->tab($this->settingsTab($parentOptions, $templateOptions))
+            ->tab($this->settingsTab($parentOptions, $templateOptions, (int) ($translation['publication_state'] ?? 0), $canPublish, $otherPublishedLocale))
             ->tab(CmsMediaSection::gallery('page', $galleryUpload))
             ->tab(CmsMediaSection::attachments('page', $attachmentUpload));
 
@@ -105,15 +106,16 @@ final readonly class PageAdminEditorDefinitionFactory
      * Vytvori tab nadpisu a rich-text obsahu jedne mutation
      *
      */
-    private function contentTab(string $locale): AdminEditorTab
+    private function contentTab(string $locale, int $state, bool $canPublish): AdminEditorTab
     {
         $fields = [
             new FieldColumn(Field::hidden('locale')->defaultValue($locale), md: 12),
             new FieldColumn(
                 Field::text('title', labelKey: 'page.fields.title')
                     ->required()
-                    ->help('', 'page.fields.title_help')
-                    ->attributes(['maxlength' => '180']),
+                    ->help('', 'admin.cms_validation.required_help')
+                    ->placeholder('', 'admin.datagrid.untitled')
+                    ->attributes(['maxlength' => '180'] + CmsPublicationSection::requiredAttributes($state, $canPublish)),
                 md: 12,
             ),
             new FieldColumn(
@@ -147,7 +149,7 @@ final readonly class PageAdminEditorDefinitionFactory
      * @param array<string,string> $parentOptions
      * @param array<string,string> $templateOptions
      */
-    private function settingsTab(array $parentOptions, array $templateOptions): AdminEditorTab
+    private function settingsTab(array $parentOptions, array $templateOptions, int $state, bool $canPublish, bool $otherPublishedLocale): AdminEditorTab
     {
         return new AdminEditorTab(
             id: 'settings',
@@ -163,7 +165,8 @@ final readonly class PageAdminEditorDefinitionFactory
                     ),
                     new FieldColumn(
                         Field::select('template_key', labelKey: 'page.fields.template')
-                            ->help('', 'page.fields.template_help')
+                            ->help('', 'admin.cms_validation.required_help')
+                            ->attributes(CmsPublicationSection::requiredAttributes($state, $canPublish, $otherPublishedLocale))
                             ->options($templateOptions),
                         md: 6,
                     ),

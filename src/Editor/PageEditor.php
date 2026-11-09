@@ -18,8 +18,10 @@ use Lemonade\Admin\Editor\Exception\EditorValidationException;
 use Lemonade\Admin\Identity\LocalActorGuard;
 use Lemonade\Admin\Localization\LanguageRegistry;
 use Lemonade\Admin\Module\AdminModuleRouteResolver;
+use Lemonade\Cms\Content\CmsContentValidationException;
 use Lemonade\Cms\Page\Models\PageModel;
 use Lemonade\Cms\Page\Services\PageService;
+use Lemonade\Framework\Localization\TranslatorInterface;
 use Lemonade\Framework\Routing\UrlGenerator;
 use Lemonade\Framework\Validation\ValidationSchema;
 
@@ -43,6 +45,7 @@ final readonly class PageEditor implements
         private AdminModuleRouteResolver $routes,
         private UrlGenerator $urls,
         private AuthorizationService $authorization,
+        private TranslatorInterface $translator,
     ) {}
 
     /**
@@ -161,6 +164,12 @@ final readonly class PageEditor implements
                 pageId: $id,
                 data: $data,
             );
+        } catch (CmsContentValidationException $exception) {
+            throw new EditorValidationException(
+                $exception->getMessage(),
+                previous: $exception,
+                errors: array_map($this->translator->get(...), $exception->errors()),
+            );
         } catch (DomainException $exception) {
             throw new EditorValidationException($exception->getMessage(), previous: $exception);
         }
@@ -188,6 +197,12 @@ final readonly class PageEditor implements
             $pageId = $this->service->createDraft(
                 actor: $actor,
                 locale: $locale,
+            );
+        } catch (CmsContentValidationException $exception) {
+            throw new EditorValidationException(
+                $exception->getMessage(),
+                previous: $exception,
+                errors: array_map($this->translator->get(...), $exception->errors()),
             );
         } catch (DomainException $exception) {
             throw new EditorValidationException($exception->getMessage(), previous: $exception);
