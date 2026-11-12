@@ -58,8 +58,6 @@ use Lemonade\Framework\Database\Schema\SchemaCompiler;
 use Lemonade\Framework\Database\Sql\IdentifierProtector;
 use Lemonade\Framework\Http\Request\HttpRequestInspector;
 use Lemonade\Framework\Http\Response\Responses;
-use Lemonade\Framework\Localization\Config\LocalizationConfig;
-use Lemonade\Framework\Localization\Config\LocalizationUrlConfig;
 use Lemonade\Framework\Localization\TranslatorInterface;
 use Lemonade\Framework\Routing\ControllerAction;
 use Lemonade\Framework\Routing\Router;
@@ -142,7 +140,7 @@ final class PageAdminTransportTest extends TestCase
             'admin.file.collection.reorder' => '/admin/files/{module}/{entity}/{usage}/reorder',
             'admin.file.collection.rename.modal' => '/admin/files/{module}/{entity}/{usage}/{file}/rename',
             'api.file.download' => '/files/{file}',
-            'api.image.show' => '/images/{module}/{variant}/{image}',
+            'api.image.show' => '/images/{variant}/{fileId}',
         ] as $routeName => $path) {
             $router->getNamed($routeName, $path, ControllerAction::for(self::class, 'testDraftPublicationAndHierarchyThroughHttp'));
         }
@@ -186,7 +184,7 @@ final class PageAdminTransportTest extends TestCase
         $controller = new \Lemonade\Admin\Action\Http\Controller\ModuleActionController(
             $transport,
             new AdminAuthorizationResponseHandler(new HttpRequestInspector(), new AdminRoutingConfiguration('/admin')),
-            new AdminUiLocale(new LocalizationConfig('cs', 'cs', ['cs', 'en'], new LocalizationUrlConfig(false, '', '', 'locale', false)), $session, $translator),
+            new AdminUiLocale($session, $translator),
             $translator,
             $pages,
             $moduleRoutes,

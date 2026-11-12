@@ -309,8 +309,7 @@ final readonly class PageDataGrid implements DataGridProviderInterface
                             shape: 'rounded',
                         )
                         : $this->thumbnails->image(
-                            module: 'cms.page',
-                            imageId: (string) $featuredImage['id'],
+                            fileId: (int) $featuredImage['id'],
                             alt: $title,
                             fallback: null,
                             size: 'compact',

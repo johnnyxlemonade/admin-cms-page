@@ -118,7 +118,7 @@ final class PageDataGridTest extends TestCase
         self::assertSame('thumbnail', $title['type']);
         self::assertSame('Kontakt', $title['value']);
         self::assertSame('/kontakt', $title['secondary'] ?? null);
-        self::assertSame('/api/image/cms.page/datagrid/31', $thumbnail['url']);
+        self::assertSame('/api/image/admin-datagrid/31', $thumbnail['url']);
         self::assertSame('page_template.content', $row['cells']['template']);
     }
 
@@ -524,7 +524,7 @@ final class PageDataGridTest extends TestCase
         );
         $router->getNamed(
             'api.image.show',
-            '/api/image/{module}/{variant}/{image}',
+            '/api/image/{variant}/{fileId}',
             ControllerAction::for('TestController', 'show'),
         );
         $urls = new UrlGenerator($router);
@@ -539,7 +539,7 @@ final class PageDataGridTest extends TestCase
         );
         $variants = new ImageVariantRegistry();
         $variants->register(
-            variant: 'datagrid',
+            variant: 'admin-datagrid',
             definition: new ImageVariantDefinition(
                 dimensions: new ImageDimensions(32, 32),
                 format: ImageFormat::Webp,
