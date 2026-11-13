@@ -139,7 +139,7 @@ final class PageAdminTransportTest extends TestCase
             'admin.file.collection.remove' => '/admin/files/{module}/{entity}/{usage}/{file}/remove',
             'admin.file.collection.reorder' => '/admin/files/{module}/{entity}/{usage}/reorder',
             'admin.file.collection.rename.modal' => '/admin/files/{module}/{entity}/{usage}/{file}/rename',
-            'api.file.download' => '/files/{file}',
+            'api.file.download' => '/api/file/download/{fileId}',
             'api.image.show' => '/images/{variant}/{fileId}',
         ] as $routeName => $path) {
             $router->getNamed($routeName, $path, ControllerAction::for(self::class, 'testDraftPublicationAndHierarchyThroughHttp'));
