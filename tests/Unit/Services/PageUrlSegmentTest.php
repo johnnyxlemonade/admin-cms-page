@@ -109,7 +109,7 @@ final class PageUrlSegmentTest extends TestCase
         $events = new TransactionalEventProcessor(
             $database,
             new AuditLogService($database),
-            new DomainEventDispatcher($this->createMock(LoggerInterface::class)),
+            new DomainEventDispatcher(self::createStub(LoggerInterface::class)),
         );
 
         return new PageService(
@@ -118,7 +118,7 @@ final class PageUrlSegmentTest extends TestCase
             $routes,
             new Slugger(),
             $events,
-            $this->createMock(PageTemplateProviderInterface::class),
+            self::createStub(PageTemplateProviderInterface::class),
             new PageSubtreeRouteMapper(),
             new PagePublicationPlanResolver(),
             new LocalUserDirectory($database),
@@ -153,13 +153,13 @@ final class PageUrlSegmentTest extends TestCase
             ),
         ];
         $results = array_map(function (array $resultRows): DatabaseResultInterface {
-            $result = $this->createMock(DatabaseResultInterface::class);
+            $result = self::createStub(DatabaseResultInterface::class);
             $result->method('result_array')->willReturn($resultRows);
             $result->method('row_array')->willReturn($resultRows[0] ?? null);
 
             return $result;
         }, $rows);
-        $driver = $this->createMock(DatabaseDriverInterface::class);
+        $driver = self::createStub(DatabaseDriverInterface::class);
         $driver->method('protect_identifiers')->willReturnCallback(
             static fn(string $identifier): string => $identifier,
         );

@@ -193,7 +193,7 @@ final class PageLifecycleNoOpTest extends TestCase
         $events = new TransactionalEventProcessor(
             $database,
             new AuditLogService($database),
-            new DomainEventDispatcher($this->createMock(LoggerInterface::class)),
+            new DomainEventDispatcher(self::createStub(LoggerInterface::class)),
         );
 
         return new PageService(
@@ -202,7 +202,7 @@ final class PageLifecycleNoOpTest extends TestCase
             $this->instanceWithoutConstructor(CmsRouteReservationService::class),
             new Slugger(),
             $events,
-            $this->createMock(PageTemplateProviderInterface::class),
+            self::createStub(PageTemplateProviderInterface::class),
             new PageSubtreeRouteMapper(),
             new PagePublicationPlanResolver(),
             new LocalUserDirectory($database),
@@ -211,7 +211,7 @@ final class PageLifecycleNoOpTest extends TestCase
 
     private function connection(PageNoOpState $state): ConnectionInterface
     {
-        $connection = $this->createMock(ConnectionInterface::class);
+        $connection = self::createStub(ConnectionInterface::class);
         $connection->method('inTransaction')->willReturnCallback(
             static fn(): bool => $state->insideTransaction,
         );
@@ -249,13 +249,13 @@ final class PageLifecycleNoOpTest extends TestCase
     private function driver(PageNoOpState $state, array $selectRows): DatabaseDriverInterface
     {
         $results = array_map(function (array $rows): DatabaseResultInterface {
-            $result = $this->createMock(DatabaseResultInterface::class);
+            $result = self::createStub(DatabaseResultInterface::class);
             $result->method('result_array')->willReturn($rows);
             $result->method('row_array')->willReturn($rows[0] ?? null);
 
             return $result;
         }, $selectRows);
-        $driver = $this->createMock(DatabaseDriverInterface::class);
+        $driver = self::createStub(DatabaseDriverInterface::class);
         $driver->method('protect_identifiers')->willReturnCallback(
             static fn(string $identifier): string => $identifier,
         );

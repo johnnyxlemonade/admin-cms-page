@@ -313,12 +313,12 @@ final class PageDataGridTest extends TestCase
     public function testDataGridLocalesIncludeDisabledLanguageWithTranslation(): void
     {
         $capturedSql = '';
-        $result = $this->createMock(DatabaseResultInterface::class);
+        $result = self::createStub(DatabaseResultInterface::class);
         $result->method('result_array')->willReturn([
             ['code' => 'cs', 'name' => 'Čeština'],
             ['code' => 'en', 'name' => 'English'],
         ]);
-        $driver = $this->createMock(DatabaseDriverInterface::class);
+        $driver = self::createStub(DatabaseDriverInterface::class);
         $driver->method('protect_identifiers')->willReturnCallback(
             static fn(string $identifier): string => $identifier,
         );
@@ -344,9 +344,9 @@ final class PageDataGridTest extends TestCase
     {
         $capturedSql = '';
         $capturedBindings = [];
-        $result = $this->createMock(DatabaseResultInterface::class);
+        $result = self::createStub(DatabaseResultInterface::class);
         $result->method('result_array')->willReturn([]);
-        $driver = $this->createMock(DatabaseDriverInterface::class);
+        $driver = self::createStub(DatabaseDriverInterface::class);
         $driver->method('protect_identifiers')->willReturnCallback(
             static fn(string $identifier): string => $identifier,
         );
@@ -372,9 +372,9 @@ final class PageDataGridTest extends TestCase
     {
         $capturedSql = '';
         $capturedBindings = [];
-        $result = $this->createMock(DatabaseResultInterface::class);
+        $result = self::createStub(DatabaseResultInterface::class);
         $result->method('result_array')->willReturn([]);
-        $driver = $this->createMock(DatabaseDriverInterface::class);
+        $driver = self::createStub(DatabaseDriverInterface::class);
         $driver->method('protect_identifiers')->willReturnCallback(
             static fn(string $identifier): string => $identifier,
         );
@@ -403,7 +403,7 @@ final class PageDataGridTest extends TestCase
             [$this->pageRow(8, parentId: 7, ownerId: 42)],
             [$this->pageRow(7, ownerId: 9)],
         ];
-        $driver = $this->createMock(DatabaseDriverInterface::class);
+        $driver = self::createStub(DatabaseDriverInterface::class);
         $driver->method('protect_identifiers')->willReturnCallback(
             static fn(string $identifier): string => $identifier,
         );
@@ -412,7 +412,7 @@ final class PageDataGridTest extends TestCase
                 $queries[] = $sql;
                 $resultRows = array_shift($rows);
                 self::assertIsArray($resultRows);
-                $result = $this->createMock(DatabaseResultInterface::class);
+                $result = self::createStub(DatabaseResultInterface::class);
                 $result->method('result_array')->willReturn($resultRows);
 
                 return $result;
@@ -470,11 +470,11 @@ final class PageDataGridTest extends TestCase
     {
         $results = [];
         foreach ($queryRows as $rows) {
-            $result = $this->createMock(DatabaseResultInterface::class);
+            $result = self::createStub(DatabaseResultInterface::class);
             $result->method('result_array')->willReturn($rows);
             $results[] = $result;
         }
-        $driver = $this->createMock(DatabaseDriverInterface::class);
+        $driver = self::createStub(DatabaseDriverInterface::class);
         $driver->method('protect_identifiers')->willReturnCallback(
             static fn(string $identifier): string => $identifier,
         );
@@ -488,7 +488,7 @@ final class PageDataGridTest extends TestCase
                 return $result;
             },
         );
-        $connection = $this->createMock(ConnectionInterface::class);
+        $connection = self::createStub(ConnectionInterface::class);
         $connection->method('select')->willReturnCallback(
             static function (string $sql) use ($permissions): array {
                 if (!str_contains($sql, 'system_role_permission')) {
@@ -506,10 +506,10 @@ final class PageDataGridTest extends TestCase
             $database,
             new CacheManager(new ArrayCacheItemPool()),
         );
-        $principal = $this->createMock(CurrentPrincipalProviderInterface::class);
+        $principal = self::createStub(CurrentPrincipalProviderInterface::class);
         $principal->method('currentUser')->willReturn(new AuthenticatedUser(0, 'fixture@example.test'));
         $authorization = new AuthorizationService($principal, $database);
-        $translator = $this->createMock(TranslatorInterface::class);
+        $translator = self::createStub(TranslatorInterface::class);
         $translator->method('get')->willReturnCallback(
             static fn(string $key): string => $key,
         );
@@ -547,7 +547,7 @@ final class PageDataGridTest extends TestCase
             ),
         );
 
-        $templates = $this->createMock(PageTemplateProviderInterface::class);
+        $templates = self::createStub(PageTemplateProviderInterface::class);
         $templates->method('templates')->willReturn([
             new PageTemplateDefinition('content', 'page_template.content'),
             new PageTemplateDefinition('auctions', 'page_template.auctions'),

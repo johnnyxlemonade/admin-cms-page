@@ -22,7 +22,7 @@ final class PageConcurrencyContractTest extends TestCase
     {
         $queries = [];
         $bindings = [];
-        $driver = $this->createMock(DatabaseDriverInterface::class);
+        $driver = self::createStub(DatabaseDriverInterface::class);
         $driver->method('protect_identifiers')->willReturnCallback(
             static fn(string $identifier): string => $identifier,
         );
@@ -54,15 +54,15 @@ final class PageConcurrencyContractTest extends TestCase
     public function testEditorReadIncludesLocalizedSummary(): void
     {
         $queries = [];
-        $root = $this->createMock(DatabaseResultInterface::class);
+        $root = self::createStub(DatabaseResultInterface::class);
         $root->method('result_array')->willReturn([['id' => 7, 'template_key' => 'content']]);
         $root->method('row_array')->willReturn(['id' => 7, 'template_key' => 'content']);
-        $translations = $this->createMock(DatabaseResultInterface::class);
+        $translations = self::createStub(DatabaseResultInterface::class);
         $translations->method('result_array')->willReturn([
             ['locale' => 'cs', 'summary' => 'Český úvod'],
             ['locale' => 'en', 'summary' => 'English intro'],
         ]);
-        $driver = $this->createMock(DatabaseDriverInterface::class);
+        $driver = self::createStub(DatabaseDriverInterface::class);
         $driver->method('protect_identifiers')->willReturnCallback(
             static fn(string $identifier): string => $identifier,
         );
@@ -90,9 +90,9 @@ final class PageConcurrencyContractTest extends TestCase
     {
         $queries = [];
         $bindings = [];
-        $maximum = $this->createMock(DatabaseResultInterface::class);
+        $maximum = self::createStub(DatabaseResultInterface::class);
         $maximum->method('row_array')->willReturn(['maximum_order' => -1]);
-        $driver = $this->createMock(DatabaseDriverInterface::class);
+        $driver = self::createStub(DatabaseDriverInterface::class);
         $driver->method('protect_identifiers')->willReturnCallback(
             static fn(string $identifier): string => $identifier,
         );
@@ -120,9 +120,9 @@ final class PageConcurrencyContractTest extends TestCase
     public function testTreeAndTranslationReadsUseWriteLocks(): void
     {
         $queries = [];
-        $result = $this->createMock(DatabaseResultInterface::class);
+        $result = self::createStub(DatabaseResultInterface::class);
         $result->method('result_array')->willReturn([]);
-        $driver = $this->createMock(DatabaseDriverInterface::class);
+        $driver = self::createStub(DatabaseDriverInterface::class);
         $driver->method('protect_identifiers')->willReturnCallback(
             static fn(string $identifier): string => $identifier,
         );

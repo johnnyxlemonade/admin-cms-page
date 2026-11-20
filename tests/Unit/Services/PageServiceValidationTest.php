@@ -180,7 +180,7 @@ final class PageServiceValidationTest extends TestCase
         ?string $routePath,
     ): PageService {
         $page = ['id' => 7, 'parent_id' => null, 'sort_order' => 0, 'template_key' => $currentTemplate, 'deleted_at' => null];
-        $driver = $this->createMock(DatabaseDriverInterface::class);
+        $driver = self::createStub(DatabaseDriverInterface::class);
         $driver->method('protect_identifiers')->willReturnCallback(static fn(string $identifier): string => $identifier);
         $driver->method('query')->willReturnCallback(function (string $sql) use ($page, $translation, $routePath): DatabaseResultInterface {
             self::assertStringStartsWith('SELECT', $sql, 'Validation and no-op saves must not write');
@@ -191,7 +191,7 @@ final class PageServiceValidationTest extends TestCase
             } else {
                 $rows = [$page];
             }
-            $result = $this->createMock(DatabaseResultInterface::class);
+            $result = self::createStub(DatabaseResultInterface::class);
             $result->method('result_array')->willReturn($rows);
             $result->method('row_array')->willReturn($rows[0] ?? null);
 

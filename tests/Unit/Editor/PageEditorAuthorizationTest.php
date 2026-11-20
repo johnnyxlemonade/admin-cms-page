@@ -63,13 +63,13 @@ final class PageEditorAuthorizationTest extends TestCase
     /** @param list<string> $permissions */
     private function editor(int $ownerId, array $permissions): PageEditor
     {
-        $result = $this->createMock(DatabaseResultInterface::class);
+        $result = self::createStub(DatabaseResultInterface::class);
         $result->method('row_array')->willReturn(['owner_id' => $ownerId]);
         $result->method('result_array')->willReturn([['owner_id' => $ownerId]]);
-        $driver = $this->createMock(DatabaseDriverInterface::class);
+        $driver = self::createStub(DatabaseDriverInterface::class);
         $driver->method('protect_identifiers')->willReturnCallback(static fn(string $identifier): string => $identifier);
         $driver->method('query')->willReturn($result);
-        $connection = $this->createMock(ConnectionInterface::class);
+        $connection = self::createStub(ConnectionInterface::class);
         $connection->method('select')->willReturnCallback(
             static function (string $sql) use ($permissions): array {
                 if (!str_contains($sql, 'system_role_permission')) {
@@ -82,7 +82,7 @@ final class PageEditorAuthorizationTest extends TestCase
                 );
             },
         );
-        $principal = $this->createMock(CurrentPrincipalProviderInterface::class);
+        $principal = self::createStub(CurrentPrincipalProviderInterface::class);
         $principal->method('currentUser')->willReturn(new AuthenticatedUser(42, 'owner@example.test'));
 
         return new PageEditor(
@@ -94,7 +94,7 @@ final class PageEditorAuthorizationTest extends TestCase
             $this->instanceWithoutConstructor(AdminModuleRouteResolver::class),
             $this->instanceWithoutConstructor(UrlGenerator::class),
             new AuthorizationService($principal, new Database($connection, $driver)),
-            $this->createMock(\Lemonade\Framework\Localization\TranslatorInterface::class),
+            self::createStub(\Lemonade\Framework\Localization\TranslatorInterface::class),
         );
     }
 

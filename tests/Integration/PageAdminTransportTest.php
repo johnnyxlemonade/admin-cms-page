@@ -110,13 +110,13 @@ final class PageAdminTransportTest extends TestCase
         $db->statement('INSERT INTO system_user_role VALUES (7, 1)');
         $db->statement("INSERT INTO system_language VALUES ('cs','Czech',1,1,1), ('en','English',1,0,2)");
         (new CreateCmsPages())->up(new Schema(new SchemaCompiler(new MysqlSchemaGrammar(new MysqlSqlEscaper($escaper), $config)), $driver));
-        $session = $this->createMock(SessionInterface::class);
+        $session = self::createStub(SessionInterface::class);
         $session->method('get')->willReturnCallback(static fn(string $key): mixed => $key === 'admin.auth.user_id' ? 7 : null);
         $audit = new AuditLogService($db);
         $authentication = new AuthenticationService(new LocalAuthenticationProvider($db), $session, $db, new CsrfTokenManager($session), $audit);
         $user = new CurrentUserProvider($authentication, $db);
         $authorization = new AuthorizationService($user, $db);
-        $locks = new EditorLockManager($db, $user, $this->createMock(EditorLockOwnerReleaserInterface::class));
+        $locks = new EditorLockManager($db, $user, self::createStub(EditorLockOwnerReleaserInterface::class));
         $languages = new LanguageRegistry($db, new CacheManager(new ArrayCacheItemPool()));
         $runtime = new CmsAdminRuntime(new TransactionalEventProcessor($db, $audit, new DomainEventDispatcher(new NullLogger())), $languages, new LocalUserDirectory($db));
         $localeRegistry = new class implements PublicLocaleRegistryInterface {
@@ -153,7 +153,7 @@ final class PageAdminTransportTest extends TestCase
         $editors = new EditorRegistry();
         $pages = new ModulePageRegistry();
         $actions = new ModuleActionRegistry();
-        $translator = $this->createMock(TranslatorInterface::class);
+        $translator = self::createStub(TranslatorInterface::class);
         $translator->method('get')->willReturnCallback(static fn(string $key): string => $key);
         $container = new Container();
         foreach ([Database::class => $db, \Lemonade\Framework\Database\DatabaseDriverInterface::class => $driver, CmsAdminRuntime::class => $runtime, CmsRouteReservationService::class => $routes, LanguageRegistry::class => $languages, LocalActorGuard::class => new LocalActorGuard($user), AuthorizationService::class => $authorization, AdminModuleRouteResolver::class => $moduleRoutes, UrlGenerator::class => new UrlGenerator($router), TranslatorInterface::class => $translator] as $id => $service) {
@@ -190,7 +190,7 @@ final class PageAdminTransportTest extends TestCase
             $moduleRoutes,
             new Responses(new ResponseBuilder($factory, $factory)),
             new UrlGenerator($router),
-            $this->createMock(\Lemonade\Framework\Session\Flash\FlashBagInterface::class),
+            self::createStub(\Lemonade\Framework\Session\Flash\FlashBagInterface::class),
         );
         $create = function () use ($controller): int {
             $response = $controller->create('pages', $this->request('create', []));

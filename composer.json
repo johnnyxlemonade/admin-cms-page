@@ -4,7 +4,7 @@
   "type": "library",
   "license": "Apache-2.0",
   "require": {
-    "php": ">=8.3 <8.6",
+    "php": ">=8.3",
     "johnnyxlemonade/admin-platform": "dev-main",
     "johnnyxlemonade/cms-core": "dev-main",
     "johnnyxlemonade/framework": "dev-main",
@@ -36,9 +36,15 @@
   },
   "require-dev": {
     "friendsofphp/php-cs-fixer": "^3.94",
-    "phpstan/phpstan": "2.3.0",
-    "phpstan/phpstan-strict-rules": "2.1.0",
-    "phpunit/phpunit": "^10.5"
+    "phpstan/phpstan": "^2.3",
+    "phpstan/phpstan-strict-rules": "^2.1",
+    "phpunit/phpunit": "^12.5"
+  },
+  "config": {
+    "sort-packages": true,
+    "platform": {
+      "php": "8.3.0"
+    }
   },
   "minimum-stability": "dev",
   "prefer-stable": true
