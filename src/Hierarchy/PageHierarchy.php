@@ -7,56 +7,57 @@ namespace Lemonade\Cms\Page\Hierarchy;
 use Lemonade\Cms\Content\CmsContentValidationException;
 
 /**
- * Vyhodnocuje stromove invarianty nad jednim snapshotem stranek
+ * Validates hierarchy invariants over one page snapshot
  */
-final class PageHierarchy
+final readonly class PageHierarchy
 {
     /**
      * @var array<int,int|null>
      */
-    private array $parents = [];
+    private array $parents;
 
     /**
      * @var array<int,list<int>>
      */
-    private array $children = [];
+    private array $children;
 
     /**
-     * @var array<int,int>
-     */
-    private array $sortOrders = [];
-
-    /**
-     * Sestavi index rodicu a deti z aktivnich stranek
+     * Indexes parents and children from active pages
      *
      * @param list<array{id:int,parent_id:int|null,sort_order?:int}> $pages
      */
     public function __construct(array $pages)
     {
+        $parents = [];
+        $children = [];
+        $sortOrders = [];
         foreach ($pages as $page) {
             $id = (int) $page['id'];
             $parentId = $page['parent_id'] === null ? null : (int) $page['parent_id'];
-            $this->parents[$id] = $parentId;
-            $this->sortOrders[$id] = (int) ($page['sort_order'] ?? 0);
-            $this->children[$parentId ?? 0][] = $id;
+            $parents[$id] = $parentId;
+            $sortOrders[$id] = (int) ($page['sort_order'] ?? 0);
+            $children[$parentId ?? 0][] = $id;
         }
-        foreach ($this->children as &$children) {
+        foreach ($children as &$siblings) {
             usort(
-                $children,
-                fn(int $left, int $right): int => [
-                    $this->sortOrders[$left],
+                $siblings,
+                static fn(int $left, int $right): int => [
+                    $sortOrders[$left],
                     $left,
                 ] <=> [
-                    $this->sortOrders[$right],
+                    $sortOrders[$right],
                     $right,
                 ],
             );
         }
-        unset($children);
+        unset($siblings);
+
+        $this->parents = $parents;
+        $this->children = $children;
     }
 
     /**
-     * Odmitne neexistujiciho rodice, sebe sama a cyklus
+     * Rejects a missing parent, self-parenting and cycles
      */
     public function assertMove(int $pageId, ?int $parentId): void
     {
@@ -76,7 +77,7 @@ final class PageHierarchy
     }
 
     /**
-     * Vrati stranku a vsechny potomky v preorder poradi
+     * Returns a page and its descendants in preorder
      *
      * @return list<int>
      */
@@ -103,7 +104,7 @@ final class PageHierarchy
     }
 
     /**
-     * Vrati predky stranky od primeho rodice ke koreni
+     * Returns ancestors from the direct parent to the root
      *
      * @return list<int>
      */
@@ -128,7 +129,7 @@ final class PageHierarchy
     }
 
     /**
-     * Vrati uroven zanoreni stranky v lese
+     * Returns the page depth in the hierarchy
      */
     public function depth(int $pageId): int
     {
@@ -136,7 +137,7 @@ final class PageHierarchy
     }
 
     /**
-     * Vrati cely les v preorder poradi a doplni pripadne osirele uzly
+     * Returns the forest in preorder including orphaned nodes
      *
      * @return list<int>
      */

@@ -9,17 +9,17 @@ use Lemonade\Framework\Localization\TranslatorInterface;
 use Lemonade\Framework\Validation\ValidationSchema;
 
 /**
- * Sklada validaci editoroveho payloadu CMS stranek
+ * Builds validation for the page editor payload
  */
 final readonly class PageEditorValidationSchema
 {
     /**
-     * Nastavuje prekladovy zdroj chyb editorove validace
+     * Creates the validation schema with translated error messages
      */
     public function __construct(private TranslatorInterface $translator) {}
 
     /**
-     * Ponechava create bez formulovych hodnot pro okamzite zalozeni draftu
+     * Allows immediate draft creation without form values
      */
     public function forCreate(): ValidationSchema
     {
@@ -27,7 +27,7 @@ final readonly class PageEditorValidationSchema
     }
 
     /**
-     * Vymezuje flat payload jedne lokalizovane mutation a globalnich nastaveni
+     * Validates the flat payload for a translation and global settings
      */
     public function forUpdate(): ValidationSchema
     {

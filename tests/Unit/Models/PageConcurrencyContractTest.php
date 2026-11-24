@@ -170,7 +170,7 @@ final class PageConcurrencyContractTest extends TestCase
         $source = file_get_contents($fileName);
         self::assertIsString($source);
 
-        self::assertStringContainsString('if ($publication->changed)', $source);
+        self::assertStringContainsString('if ($publication->isChanged())', $source);
         self::assertStringNotContainsString('assertPublishedLocalesCanMove', $source);
     }
 }

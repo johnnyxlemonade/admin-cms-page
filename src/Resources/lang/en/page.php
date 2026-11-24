@@ -8,6 +8,10 @@ return [
         'description' => 'Manage hierarchical website pages.',
     ],
 
+    'templates' => [
+        'default' => 'General page',
+    ],
+
     'actions' => [
         'create' => 'Add page',
         'move_up' => 'Move up',

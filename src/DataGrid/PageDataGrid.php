@@ -36,12 +36,12 @@ use Lemonade\Framework\Localization\TranslatorInterface;
 use Lemonade\Framework\Routing\UrlGenerator;
 
 /**
- * Promita CMS strom do shared hierarchickeho DataGridu
+ * Projects the page hierarchy into the shared DataGrid
  */
 final readonly class PageDataGrid implements DataGridProviderInterface
 {
     /**
-     * Nastavuje stromovou persistenci, content locales a Admin presentation zavislosti
+     * Creates the grid with page persistence and Admin presentation dependencies
      */
     public function __construct(
         private PageModel $pages,
@@ -57,7 +57,7 @@ final readonly class PageDataGrid implements DataGridProviderInterface
     ) {}
 
     /**
-     * Vrati pravo potrebne pro cteni Pages gridu
+     * Returns the permission required to read the page grid
      */
     public function permission(): string
     {
@@ -65,7 +65,7 @@ final readonly class PageDataGrid implements DataGridProviderInterface
     }
 
     /**
-     * Deklaruje hierarchicke sloupce, views a filtry bez strankovani
+     * Defines hierarchical columns, views and filters without pagination
      */
     public function dataGridDefinition(): DataGridDefinition
     {
@@ -109,7 +109,7 @@ final readonly class PageDataGrid implements DataGridProviderInterface
     }
 
     /**
-     * Vrati jeden strukturalni preorder vcetne ancestors filtrovanych vysledku
+     * Returns filtered rows with the ancestors needed for tree context
      */
     public function execute(DataGridQuery $query): DataGridResult
     {
@@ -145,7 +145,7 @@ final readonly class PageDataGrid implements DataGridProviderInterface
         );
         $templateLabels = [];
         foreach ($this->templates->templates() as $template) {
-            $templateLabels[$template->key()] = $this->translator->get($template->labelKey());
+            $templateLabels[$template->getKey()] = $this->translator->get($template->getLabelKey());
         }
         $siblingMoves = $this->siblingMoves($allRows);
         $orderedRows = [];
@@ -166,7 +166,7 @@ final readonly class PageDataGrid implements DataGridProviderInterface
     }
 
     /**
-     * Vybere odpovidajici radky a doplni jejich predky pro stromovy kontext
+     * Selects matching rows and adds their ancestors for tree context
      *
      * @param list<array<string,mixed>> $rows
      * @param array<int,array<string,mixed>> $translations
@@ -246,7 +246,7 @@ final readonly class PageDataGrid implements DataGridProviderInterface
     }
 
     /**
-     * Vytvori typed row vcetne tree parent metadata
+     * Builds a typed row with its tree parent metadata
      *
      * @param array<string,mixed> $page
      * @param array<string,mixed>|null $translation
@@ -355,7 +355,7 @@ final readonly class PageDataGrid implements DataGridProviderInterface
     }
 
     /**
-     * Vytvori povolene editorove, poradi a lifecycle akce radku
+     * Builds authorized edit, reorder and lifecycle actions
      *
      * @return list<DataGridRowActionDefinition>
      */
@@ -404,7 +404,7 @@ final readonly class PageDataGrid implements DataGridProviderInterface
     }
 
     /**
-     * Vytvori canonical edit URL se zachovanym content locale
+     * Builds an edit URL that preserves the content locale
      */
     private function editUrl(int $pageId, string $locale): string
     {
@@ -415,7 +415,7 @@ final readonly class PageDataGrid implements DataGridProviderInterface
     }
 
     /**
-     * Vytvori stromove moznosti filtru rodice ve vychozim content locale
+     * Builds parent filter options in the default content locale
      *
      * @return list<SelectOptionDefinition>
      */
@@ -454,7 +454,7 @@ final readonly class PageDataGrid implements DataGridProviderInterface
     }
 
     /**
-     * Vrati vlastni stranky a nezbytne cizi predky bez per-row dotazu
+     * Returns owned pages with required ancestors without per-row queries
      *
      * @return list<array<string,mixed>>
      */
@@ -470,7 +470,7 @@ final readonly class PageDataGrid implements DataGridProviderInterface
     }
 
     /**
-     * Zobrazi auditni datum nad identitou uzivatele
+     * Displays an audit date with its actor
      */
     private function auditMetadataCell(mixed $date, mixed $actor): StackedCell
     {
@@ -484,7 +484,7 @@ final readonly class PageDataGrid implements DataGridProviderInterface
     }
 
     /**
-     * Zobrazi datum bez sekund podle jazyka administrace
+     * Formats a date without seconds in the Admin locale
      */
     private function formatDateTime(mixed $value): string
     {
@@ -505,7 +505,7 @@ final readonly class PageDataGrid implements DataGridProviderInterface
     }
 
     /**
-     * Urci dostupnost posunu podle cele aktivni skupiny sourozencu
+     * Determines reorder availability from each active sibling group
      *
      * @param list<array<string,mixed>> $rows
      * @return array<int,array{up:bool,down:bool}>
@@ -522,7 +522,16 @@ final readonly class PageDataGrid implements DataGridProviderInterface
         }
         $moves = [];
         foreach ($siblings as $group) {
-            usort($group, static fn(array $left, array $right): int => [(int) $left['sort_order'], (int) $left['id']] <=> [(int) $right['sort_order'], (int) $right['id']]);
+            usort(
+                $group,
+                static fn(array $left, array $right): int => [
+                    (int) $left['sort_order'],
+                    (int) $left['id'],
+                ] <=> [
+                    (int) $right['sort_order'],
+                    (int) $right['id'],
+                ],
+            );
             $last = count($group) - 1;
             foreach ($group as $position => $row) {
                 $moves[(int) $row['id']] = ['up' => $position > 0, 'down' => $position < $last];

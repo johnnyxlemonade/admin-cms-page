@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace Lemonade\Cms\Page\Template;
 
 /**
- * Poskytuje hostem podporovane sablony pro editor a validaci stranek
+ * Provides the page templates available for editing and validation
  */
 interface PageTemplateProviderInterface
 {
     /**
-     * Vrati hostem podporovane sablony v poradi pro novy draft
+     * Returns available page templates in display order
      *
      * @return non-empty-list<PageTemplateDefinition>
      */

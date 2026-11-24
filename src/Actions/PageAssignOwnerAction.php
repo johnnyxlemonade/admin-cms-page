@@ -18,12 +18,12 @@ use Lemonade\Cms\Page\Services\PageService;
 use Lemonade\Framework\Http\HttpStatus as HttpStatusCode;
 
 /**
- * Predava vlastnictvi stranky samostatnou auditovanou operaci
+ * Transfers page ownership in a separate audited operation
  */
 final readonly class PageAssignOwnerAction implements ModuleActionHandlerInterface, ModuleActionAccessPolicyInterface
 {
     /**
-     * Nastavuje autorizaci, persistenci a ownership lifecycle stranek
+     * Creates the action with ownership and authorization dependencies
      */
     public function __construct(
         private PageService $pages,
@@ -33,7 +33,7 @@ final readonly class PageAssignOwnerAction implements ModuleActionHandlerInterfa
     ) {}
 
     /**
-     * Vyzaduje assign permission a pristup ke konkretni strance
+     * Requires assignment permission and access to the page
      */
     public function accessDecision(?int $id): bool
     {
@@ -47,7 +47,7 @@ final readonly class PageAssignOwnerAction implements ModuleActionHandlerInterfa
     }
 
     /**
-     * Overi cilove ID a provede auditovane predani vlastnictvi
+     * Validates the target and transfers ownership with an audit event
      *
      * @param array<string,mixed> $payload
      */

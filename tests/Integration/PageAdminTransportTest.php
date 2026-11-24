@@ -160,17 +160,16 @@ final class PageAdminTransportTest extends TestCase
             $container->instance($id, $service);
         }
 
-        $templates = new class implements \Lemonade\Cms\Page\Template\PageTemplateProviderInterface {
-            public function templates(): array
-            {
-                return [new \Lemonade\Cms\Page\Template\PageTemplateDefinition('content', 'Content')];
-            }
-        };
-        $container->instance(\Lemonade\Cms\Page\Template\PageTemplateProviderInterface::class, $templates);
+        $container->singletonTagged(
+            'test.page.template.content',
+            new \Lemonade\Cms\Page\Template\PageTemplateDefinition('content', 'Content'),
+            \Lemonade\Cms\Page\Template\PageTemplateDefinition::class,
+        );
         $container->instance(TransactionalEventProcessor::class, new TransactionalEventProcessor($db, $audit, new DomainEventDispatcher(new NullLogger())));
         $container->instance(LocalUserDirectory::class, new LocalUserDirectory($db));
         $provider = new CmsPageServiceProvider();
         $provider->register($container);
+        $templates = $container->get(\Lemonade\Cms\Page\Template\PageTemplateProviderInterface::class);
         $editors->register('cms.page', \Lemonade\Cms\Page\Editor\PageEditor::class);
         $pages->registerEditor('cms.page', \Lemonade\Cms\Page\PageModulePageProvider::class);
         (new \Lemonade\Cms\Page\Actions\PageActionRegistrar($actions))->register();
@@ -204,7 +203,7 @@ final class PageAdminTransportTest extends TestCase
             return $this->json($response);
         };
         $id = $create();
-        self::assertSame('', ($db->table('cms_page')->where('id', $id)->first() ?? [])['template_key']);
+        self::assertSame('default', ($db->table('cms_page')->where('id', $id)->first() ?? [])['template_key']);
         $empty = ['locale' => 'cs', 'title' => '', 'template_key' => ''];
         $save($id, $empty);
         self::assertSame([], $db->table('cms_route')->getArray());

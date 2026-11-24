@@ -9,12 +9,12 @@ use Lemonade\Framework\Database\Schema\Blueprint\TableBlueprint;
 use Lemonade\Framework\Database\Schema\Schema;
 
 /**
- * Vytvari stabilni strom stranek a lokalizovane obsahove mutace
+ * Creates the stable page tree and localized content tables
  */
 final readonly class CreateCmsPages implements MigrationInterface
 {
     /**
-     * Vrati stabilni identifikator schema migrace
+     * Returns the stable schema migration identifier
      */
     public static function identifier(): string
     {
@@ -22,7 +22,7 @@ final readonly class CreateCmsPages implements MigrationInterface
     }
 
     /**
-     * Vytvori presne dve tabulky CMS Page s databazovymi invarianty
+     * Creates the two page tables with database invariants
      */
     public function up(Schema $schema): void
     {

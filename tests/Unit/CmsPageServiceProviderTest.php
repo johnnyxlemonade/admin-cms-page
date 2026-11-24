@@ -6,6 +6,7 @@ namespace Lemonade\Cms\Page\Tests\Unit;
 
 use Lemonade\Cms\Page\Actions\PageActionRegistrar;
 use Lemonade\Cms\Page\CmsPageServiceProvider;
+use Lemonade\Cms\Page\Public\PublishedPageReadModel;
 use Lemonade\Framework\Container\Container;
 use Lemonade\Framework\Routing\RouteRegistrarInterface;
 use PHPUnit\Framework\TestCase;
@@ -16,7 +17,7 @@ use PHPUnit\Framework\TestCase;
 final class CmsPageServiceProviderTest extends TestCase
 {
     /**
-     * Registruje pouze administracni sluzby bez verejneho handleru a rout
+     * Registers the public reader without installing a host route handler
      */
     public function testItDoesNotActivatePublicPageRouting(): void
     {
@@ -25,6 +26,7 @@ final class CmsPageServiceProviderTest extends TestCase
         (new CmsPageServiceProvider())->register($container);
 
         self::assertTrue($container->isBound(PageActionRegistrar::CREATE_HANDLER));
+        self::assertTrue($container->isBound(PublishedPageReadModel::class));
         self::assertSame([], iterator_to_array($container->tagged(RouteRegistrarInterface::class)));
     }
 }

@@ -31,12 +31,12 @@ use Lemonade\Framework\Localization\TranslatorInterface;
 use Lemonade\Framework\Routing\UrlGenerator;
 
 /**
- * Sklada index a full-page editor CMS stranek
+ * Builds the page index and full-page editor
  */
 final readonly class PageModulePageProvider implements ModuleIndexPageProviderInterface, ModuleEditorPageProviderInterface
 {
     /**
-     * Nastavuje Pages grid, editor presentation, preklady a host template contract
+     * Creates the page provider with its grid, editor and template dependencies
      */
     public function __construct(
         private PageDataGrid $grid,
@@ -53,7 +53,7 @@ final readonly class PageModulePageProvider implements ModuleIndexPageProviderIn
     ) {}
 
     /**
-     * Vrati pravo potrebne pro otevreni Pages indexu
+     * Returns the permission required to open the page index
      */
     public function indexPermission(): string
     {
@@ -61,7 +61,7 @@ final readonly class PageModulePageProvider implements ModuleIndexPageProviderIn
     }
 
     /**
-     * Vytvori standardni Pages index s autorizovanou create akci
+     * Builds the page index with an authorized create action
      */
     public function index(string $locale): ModulePage
     {
@@ -108,7 +108,7 @@ final readonly class PageModulePageProvider implements ModuleIndexPageProviderIn
     }
 
     /**
-     * Draft se zaklada primarni akci bez samostatne create stranky
+     * Rejects the unused full-page create route because the action creates a draft
      *
      * @param array<string,string> $errors
      * @param array<string,mixed> $input
@@ -120,7 +120,7 @@ final readonly class PageModulePageProvider implements ModuleIndexPageProviderIn
     }
 
     /**
-     * Vytvori editor vybrane lokalizace stranky
+     * Builds the editor for the selected page translation
      *
      * @param array<string,string> $errors
      * @param array<string,mixed> $input
@@ -131,7 +131,11 @@ final readonly class PageModulePageProvider implements ModuleIndexPageProviderIn
         $locales = $editor->data()['locales'];
         $selected = $this->resolveContentLocale($locales, $query);
         $page = $editor->data()['page'];
-        $otherPublishedLocale = array_filter($page['translations'], static fn(array $translation): bool => $translation['locale'] !== $selected['code'] && (int) $translation['publication_state'] === CmsPublicationState::Published->value) !== [];
+        $otherPublishedLocale = array_filter(
+            $page['translations'],
+            static fn(array $translation): bool => $translation['locale'] !== $selected['code']
+                && (int) $translation['publication_state'] === CmsPublicationState::Published->value,
+        ) !== [];
         $page['translations'] = array_values(array_filter(
             $page['translations'],
             static fn(array $translation): bool => $translation['locale'] === $selected['code'],
@@ -196,7 +200,7 @@ final readonly class PageModulePageProvider implements ModuleIndexPageProviderIn
                         'url_segment' => $canonicalPath === '' ? '' : basename($canonicalPath),
                         'parent_id' => $page['parent_id'] === null ? '' : 'page-' . (int) $page['parent_id'],
                         'template_key' => (string) ($page['template_key'] ?? ''),
-                        'publication_state' => CmsPublicationState::from((int) ($translation['publication_state'] ?? CmsPublicationState::New->value))->editorValue(),
+                        'publication_state' => CmsPublicationState::from((int) ($translation['publication_state'] ?? CmsPublicationState::New->value))->getEditorValue(),
                         'published_at' => (string) ($translation['published_at'] ?? ''),
                         'created_by_name' => (string) ($page['created_by_name'] ?? '—'),
                         'created_at' => (string) ($page['created_at'] ?? ''),
@@ -219,7 +223,7 @@ final readonly class PageModulePageProvider implements ModuleIndexPageProviderIn
     }
 
     /**
-     * Sestavi options nesmazanych lokalnich uzivatelu pro ownership transfer
+     * Returns assignable local users as owner options
      *
      * @return array<int,string>
      */
@@ -234,7 +238,7 @@ final readonly class PageModulePageProvider implements ModuleIndexPageProviderIn
     }
 
     /**
-     * Vybere povoleny content locale podle explicitniho query contextu
+     * Resolves an available content locale from the editor query
      *
      * @param list<array<string,mixed>> $locales
      * @param array<string,mixed> $query
@@ -263,7 +267,7 @@ final readonly class PageModulePageProvider implements ModuleIndexPageProviderIn
     }
 
     /**
-     * Vytvori linkove prepinani dostupnych content locales editoru
+     * Builds links for the available content locales
      *
      * @param list<array<string,mixed>> $locales
      */
@@ -274,6 +278,9 @@ final readonly class PageModulePageProvider implements ModuleIndexPageProviderIn
             $code = (string) $locale['code'];
             $enabled = (int) ($locale['enabled'] ?? 1) === 1;
             $hasTranslation = (int) ($locale['has_translation'] ?? 0) === 1;
+            $translationStatus = $hasTranslation
+                ? 'page.editor.locale.existing_translation'
+                : 'page.editor.locale.new_translation';
             $items[] = new AdminEditorHeaderContextItem(
                 label: (string) $locale['name'],
                 href: $this->urls->route(
@@ -281,11 +288,7 @@ final readonly class PageModulePageProvider implements ModuleIndexPageProviderIn
                     params: ['module' => 'pages', 'id' => $pageId, 'locale' => $code],
                 ),
                 active: $code === $selectedLocale,
-                secondary: !$enabled
-                    ? $this->translator->get('page.editor.locale.disabled')
-                    : ($hasTranslation
-                        ? $this->translator->get('page.editor.locale.existing_translation')
-                        : $this->translator->get('page.editor.locale.new_translation')),
+                secondary: $this->translator->get($enabled ? $translationStatus : 'page.editor.locale.disabled'),
                 code: $code,
                 translationExists: $hasTranslation,
             );
@@ -298,7 +301,7 @@ final readonly class PageModulePageProvider implements ModuleIndexPageProviderIn
     }
 
     /**
-     * Vytvori stromove moznosti rodice bez aktualniho podstromu
+     * Builds parent options without the current page subtree
      *
      * @return array<string,string>
      */
@@ -325,7 +328,7 @@ final readonly class PageModulePageProvider implements ModuleIndexPageProviderIn
     }
 
     /**
-     * Vytvori host template options a zachova nedostupny ulozeny klic
+     * Builds template options and preserves an unavailable stored key
      *
      * @return array<string,string>
      */
@@ -333,7 +336,7 @@ final readonly class PageModulePageProvider implements ModuleIndexPageProviderIn
     {
         $options = ['' => $this->translator->get('page.editor.template_none')];
         foreach ($this->templates->templates() as $template) {
-            $options[$template->key()] = $this->translator->get($template->labelKey());
+            $options[$template->getKey()] = $this->translator->get($template->getLabelKey());
         }
         if ($currentTemplateKey !== '' && !isset($options[$currentTemplateKey])) {
             $options[$currentTemplateKey] = $currentTemplateKey . ' — ' . $this->translator->get('page.editor.template_unavailable');

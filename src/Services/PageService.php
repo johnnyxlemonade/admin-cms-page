@@ -19,6 +19,7 @@ use Lemonade\Cms\Page\Hierarchy\PageHierarchy;
 use Lemonade\Cms\Page\Models\PageModel;
 use Lemonade\Cms\Page\Publication\PagePublicationPlanResolver;
 use Lemonade\Cms\Page\Routing\PageSubtreeRouteMapper;
+use Lemonade\Cms\Page\Template\PageTemplateProvider;
 use Lemonade\Cms\Page\Template\PageTemplateProviderInterface;
 use Lemonade\Cms\Routing\Cms\CmsRouteReservationService;
 use Lemonade\Cms\Routing\Cms\CmsRouteValidationException;
@@ -26,14 +27,14 @@ use Lemonade\Framework\Support\Slug\Slugger;
 use RuntimeException;
 
 /**
- * Orchestruje strom, lokalizace, routy a audit CMS stranek
+ * Coordinates page hierarchy, translations, routes and audit
  */
 final readonly class PageService
 {
     private const int MAXIMUM_PATH_LENGTH = 700;
 
     /**
-     * Nastavuje persistence, authorization, routy, templates a transakcni audit
+     * Creates the page service with persistence, routing and audit dependencies
      */
     public function __construct(
         private PageModel $pages,
@@ -48,7 +49,7 @@ final readonly class PageService
     ) {}
 
     /**
-     * Vytvori minimalni draft ve vychozim locale bez povinne sablony
+     * Creates a minimal draft with the general page template
      */
     public function createDraft(AuditActor $actor, string $locale): int
     {
@@ -62,7 +63,7 @@ final readonly class PageService
                 $pageId = $this->pages->createDraft(
                     userId: $this->actorUserId($actor),
                     locale: $locale,
-                    templateKey: '',
+                    templateKey: PageTemplateProvider::DEFAULT_KEY,
                     now: date('Y-m-d H:i:s'),
                 );
                 if ($pageId < 1) {
@@ -76,23 +77,23 @@ final readonly class PageService
     }
 
     /**
-     * Ulozi globalni nastaveni, jednu lokalizaci a publication stav v jedne transakci
+     * Saves global settings, one translation and publication state in one transaction
      *
      * @param array<string,mixed> $data
      */
     public function save(AuditActor $actor, int $pageId, array $data): void
     {
         $input = CmsContentInput::fromEditor($data);
-        $locale = $input->locale;
-        $title = $input->title;
-        $summary = $input->summary;
-        $content = $input->content;
-        $pageTitle = $input->pageTitle;
-        $metaDescription = $input->metaDescription;
+        $locale = $input->getLocale();
+        $title = $input->getTitle();
+        $summary = $input->getSummary();
+        $content = $input->getContent();
+        $pageTitle = $input->getPageTitle();
+        $metaDescription = $input->getMetaDescription();
         $parentId = $this->nullablePositiveInt($data['parent_id'] ?? null);
         $templateKey = CmsContentValidation::texts($data, ['template_key'])['template_key'] ?? '';
-        $requestedState = $input->hasPublication ? CmsPublicationState::from((int) $input->publicationState) : null;
-        $publishedAtInput = (string) $input->publishedAt;
+        $requestedState = $input->hasPublication() ? CmsPublicationState::from((int) $input->getPublicationState()) : null;
+        $publishedAtInput = (string) $input->getPublishedAt();
 
         $this->events->execute(
             $actor,
@@ -126,11 +127,11 @@ final readonly class PageService
                     $existingTranslation,
                     $now,
                 );
-                $errors = CmsContentValidation::content($input, $publication->state, 'page');
+                $errors = CmsContentValidation::content($input, $publication->getState(), 'page');
                 try {
-                    $this->assertTemplateCanBeSaved($templateKey, (string) $currentPage['template_key'], $publication->state);
+                    $this->assertTemplateCanBeSaved($templateKey, (string) $currentPage['template_key'], $publication->getState());
                 } catch (CmsContentValidationException $exception) {
-                    $errors += $exception->errors();
+                    $errors += $exception->getErrors();
                 }
                 CmsContentValidation::assert($errors);
                 foreach ($this->pages->publishedTranslations($pageId) as $published) {
@@ -158,7 +159,7 @@ final readonly class PageService
                     title: $title,
                     subtreeIds: $subtreeIds,
                 );
-                $this->assertPublication($pageId, $locale, $parentId, $publication->state, $publication->publishedAt, $subtreeIds);
+                $this->assertPublication($pageId, $locale, $parentId, $publication->getState(), $publication->getPublishedAt(), $subtreeIds);
                 if (!$routesChanged && $this->isSaveNoOp(
                     pageId: $pageId,
                     currentPage: $currentPage,
@@ -171,8 +172,8 @@ final readonly class PageService
                     content: $content,
                     pageTitle: $pageTitle,
                     metaDescription: $metaDescription,
-                    publicationState: $publication->state,
-                    publishedAt: $publication->publishedAt,
+                    publicationState: $publication->getState(),
+                    publishedAt: $publication->getPublishedAt(),
                 )) {
                     $events->noOp();
 
@@ -199,8 +200,8 @@ final readonly class PageService
                     now: $now,
                     translationId: isset($existingTranslation['id']) ? (int) $existingTranslation['id'] : null,
                 );
-                if ($publication->changed) {
-                    $this->pages->savePublication($pageId, $locale, $publication->state, $publication->publishedAt, $now);
+                if ($publication->isChanged()) {
+                    $this->pages->savePublication($pageId, $locale, $publication->getState(), $publication->getPublishedAt(), $now);
                 }
                 $this->pages->touchUpdatedBy($pageId, $this->actorUserId($actor), $now);
                 $events->record(new DomainEvent(
@@ -210,9 +211,9 @@ final readonly class PageService
                     (string) $pageId,
                     ['locale' => $locale],
                 ));
-                if ($publication->requiresPublicationEvent) {
+                if ($publication->requiresPublicationEvent()) {
                     $events->record(new DomainEvent(
-                        $publication->state === CmsPublicationState::Published
+                        $publication->getState() === CmsPublicationState::Published
                             ? 'cms.page.published'
                             : 'cms.page.unpublished',
                         'cms.page',
@@ -226,7 +227,7 @@ final readonly class PageService
     }
 
     /**
-     * Normalizuje a explicitne zmeni vlastni segment vcetne celeho podstromu
+     * Changes an explicit URL segment and updates its subtree
      */
     public function changeUrlSegment(
         AuditActor $actor,
@@ -277,7 +278,7 @@ final readonly class PageService
     }
 
     /**
-     * Soft-deleteuje pouze list bez aktivnich potomku
+     * Soft-deletes a leaf page without active descendants
      */
     public function delete(AuditActor $actor, int $pageId): void
     {
@@ -312,7 +313,7 @@ final readonly class PageService
     }
 
     /**
-     * Obnovi stranku jako draft pokud je jeji rodic stale aktivni
+     * Restores a page as a draft when its parent remains active
      */
     public function restore(AuditActor $actor, int $pageId): void
     {
@@ -359,7 +360,7 @@ final readonly class PageService
     }
 
     /**
-     * Posune stranku o jednu pozici mezi sourozenci
+     * Moves a page by one sibling position
      */
     public function reorder(AuditActor $actor, int $pageId, int $direction): void
     {
@@ -393,7 +394,7 @@ final readonly class PageService
     }
 
     /**
-     * Preda vlastnictvi existujicimu lokalnimu uzivateli a zapise auditni rozdil
+     * Transfers ownership to a local user and records the audit change
      */
     public function transferOwner(AuditActor $actor, int $pageId, int $newOwnerId): void
     {
@@ -434,7 +435,7 @@ final readonly class PageService
     }
 
     /**
-     * Prepocita cely podstrom pri presunu nebo explicitni zmene segmentu
+     * Updates subtree routes after a move or explicit segment change
      *
      * @param list<int> $subtreeIds
      */
@@ -456,8 +457,13 @@ final readonly class PageService
         }
 
         $currentPath = $rootRoutes[$locale] ?? null;
-        $segment = $explicitSegment
-            ?? ($currentPath === null ? ($title === '' ? null : $this->slugger->slug($title, 180, $locale)) : basename($currentPath));
+        $segment = $explicitSegment;
+        if ($segment === null && $currentPath !== null) {
+            $segment = basename($currentPath);
+        }
+        if ($segment === null && $title !== '') {
+            $segment = $this->slugger->slug($title, 180, $locale);
+        }
         if ($segment === '') {
             throw new CmsContentValidationException(['url_segment' => 'admin.url_segment.invalid']);
         }
@@ -511,7 +517,7 @@ final readonly class PageService
     }
 
     /**
-     * Normalizuje zdrojove sourozence a prida presouvanou stranku na konec cile
+     * Reorders source siblings and appends the page to its new siblings
      *
      * @param list<array{id:int,parent_id:int|null,sort_order:int,template_key:string,updated_at:string,deleted_at:mixed}> $rows
      */
@@ -537,7 +543,7 @@ final readonly class PageService
     }
 
     /**
-     * Vrati sourozence ve stabilnim poradi
+     * Returns siblings in stable order
      *
      * @param list<array{id:int,parent_id:int|null,sort_order:int,template_key:string,updated_at:string,deleted_at:mixed}> $rows
      * @return list<int>
@@ -548,13 +554,22 @@ final readonly class PageService
             $rows,
             static fn(array $row): bool => ($row['parent_id'] === null ? null : (int) $row['parent_id']) === $parentId,
         ));
-        usort($siblings, static fn(array $left, array $right): int => [(int) $left['sort_order'], (int) $left['id']] <=> [(int) $right['sort_order'], (int) $right['id']]);
+        usort(
+            $siblings,
+            static fn(array $left, array $right): int => [
+                (int) $left['sort_order'],
+                (int) $left['id'],
+            ] <=> [
+                (int) $right['sort_order'],
+                (int) $right['id'],
+            ],
+        );
 
         return array_map(static fn(array $row): int => (int) $row['id'], $siblings);
     }
 
     /**
-     * Vrati zamceny radek stranky nebo ohlasi chybejici cil
+     * Returns the locked page row or reports a missing target
      *
      * @param list<array{id:int,parent_id:int|null,sort_order:int,template_key:string,updated_at:string,deleted_at:mixed}> $rows
      * @return array{id:int,parent_id:int|null,sort_order:int,template_key:string,updated_at:string,deleted_at:mixed}
@@ -571,7 +586,7 @@ final readonly class PageService
     }
 
     /**
-     * Sestavi lokalizovanou cestu pod rodicem a vyzada jeho existujici route
+     * Builds a localized child path from its parent's route
      */
     private function pathUnderParent(?int $parentId, string $locale, string $segment): string
     {
@@ -587,7 +602,7 @@ final readonly class PageService
     }
 
     /**
-     * Overi a normalizuje explicitne zadany jediny URL segment
+     * Validates and normalizes one explicit URL segment
      */
     private function explicitSegment(string $value, string $locale): string
     {
@@ -605,7 +620,7 @@ final readonly class PageService
     }
 
     /**
-     * Overi hierarchickou dostupnost i pri nezmenene publikaci
+     * Validates hierarchy availability even when publication is unchanged
      *
      * @param list<int> $subtreeIds
      */
@@ -645,7 +660,7 @@ final readonly class PageService
     }
 
     /**
-     * Prelozi shared route chybu na validacni klic Pages editoru
+     * Maps shared route errors to page editor validation keys
      */
     private function pageRouteValidation(CmsRouteValidationException $exception): DomainException
     {
@@ -658,7 +673,7 @@ final readonly class PageService
     }
 
     /**
-     * Prevede typed parent option na volitelne ID
+     * Converts a parent option to an optional ID
      */
     private function nullablePositiveInt(mixed $value): ?int
     {
@@ -673,7 +688,7 @@ final readonly class PageService
     }
 
     /**
-     * Normalizuje prazdny lokalizovany text na null
+     * Normalizes empty localized text to null
      */
     private function nullableText(mixed $value): ?string
     {
@@ -683,7 +698,7 @@ final readonly class PageService
     }
 
     /**
-     * Overi content locale proti canonical language registry
+     * Checks a content locale against the language registry
      */
     private function enabledLocale(string $locale): bool
     {
@@ -697,7 +712,7 @@ final readonly class PageService
     }
 
     /**
-     * Overi template klic proti aktualni host nabidce
+     * Validates a template code against the current offer
      */
     private function assertTemplateCanBeSaved(
         string $requestedTemplateKey,
@@ -705,7 +720,7 @@ final readonly class PageService
         CmsPublicationState $publicationState,
     ): void {
         foreach ($this->templates->templates() as $template) {
-            if ($template->key() === $requestedTemplateKey) {
+            if ($template->getKey() === $requestedTemplateKey) {
                 return;
             }
         }
@@ -720,7 +735,7 @@ final readonly class PageService
     }
 
     /**
-     * Rozpozna skutecne nezmeneny save ze zamceneho snapshotu
+     * Detects an unchanged save from the locked snapshot
      *
      * @param array<string,mixed> $currentPage
      * @param array<string,mixed>|null $existingTranslation
@@ -768,7 +783,7 @@ final readonly class PageService
     }
 
     /**
-     * Vrati povinne lokalni ID auditniho aktora CMS mutace
+     * Returns the required local user ID of the audit actor
      */
     private function actorUserId(AuditActor $actor): int
     {

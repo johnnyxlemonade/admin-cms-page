@@ -18,12 +18,12 @@ use Lemonade\Cms\Page\Services\PageService;
 use Lemonade\Framework\Http\HttpStatus;
 
 /**
- * Obnovuje smazanou stranku jako draft
+ * Restores a deleted page as a draft
  */
 final readonly class PageRestoreAction implements ModuleActionHandlerInterface, ModuleActionAccessPolicyInterface
 {
     /**
-     * Nastavuje lifecycle service a canonical actor guard
+     * Creates the action with page lifecycle and actor dependencies
      */
     public function __construct(
         private PageService $pages,
@@ -33,7 +33,7 @@ final readonly class PageRestoreAction implements ModuleActionHandlerInterface, 
     ) {}
 
     /**
-     * Overi obnoveni globalnim nebo vlastnickym opravnenim
+     * Authorizes restoration using global or owner permission
      */
     public function accessDecision(?int $id): bool
     {
@@ -45,7 +45,7 @@ final readonly class PageRestoreAction implements ModuleActionHandlerInterface, 
     }
 
     /**
-     * Obnovi existujici stranku jako draft
+     * Restores an existing page as a draft
      *
      * @param array<string,mixed> $payload
      */

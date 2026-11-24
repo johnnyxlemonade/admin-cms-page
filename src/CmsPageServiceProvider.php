@@ -16,7 +16,10 @@ use Lemonade\Cms\Page\Actions\PageActionRegistrar;
 use Lemonade\Cms\Page\Actions\PageReorderAction;
 use Lemonade\Cms\Page\DataGrid\PageDataGrid;
 use Lemonade\Cms\Page\Editor\PageEditor;
+use Lemonade\Cms\Page\Public\PublishedPageReadModel;
 use Lemonade\Cms\Page\Services\PageService;
+use Lemonade\Cms\Page\Template\PageTemplateProvider;
+use Lemonade\Cms\Page\Template\PageTemplateProviderInterface;
 use Lemonade\Framework\Container\ContainerBuilderInterface;
 use Lemonade\Framework\Container\ContainerInterface;
 use Lemonade\Framework\Core\BootableServiceProviderInterface;
@@ -24,15 +27,17 @@ use Lemonade\Framework\Core\ServiceProviderInterface;
 use Lemonade\Framework\Localization\TranslationResourceRegistry;
 
 /**
- * Registruje CMS Page contribution do sdileneho Admin runtime
+ * Registers CMS Page contributions with the shared Admin runtime
  */
 final readonly class CmsPageServiceProvider implements ServiceProviderInterface, BootableServiceProviderInterface
 {
     /**
-     * Registruje DI definitions administracniho modulu
+     * Registers service definitions for the page module
      */
     public function register(ContainerBuilderInterface $container): void
     {
+        $container->singleton(PageTemplateProviderInterface::class, PageTemplateProvider::class);
+        $container->scoped(PublishedPageReadModel::class, PublishedPageReadModel::class);
         $container->scoped(
             PageActionRegistrar::CREATE_HANDLER,
             static fn(ContainerInterface $container): StandardEditorAction => StandardEditorAction::create(
@@ -66,7 +71,7 @@ final readonly class CmsPageServiceProvider implements ServiceProviderInterface,
     }
 
     /**
-     * Pripoji metadata, prava a package resources modulu po container freeze
+     * Adds page resources and runtime contributions after container freeze
      */
     public function boot(ContainerInterface $container): void
     {

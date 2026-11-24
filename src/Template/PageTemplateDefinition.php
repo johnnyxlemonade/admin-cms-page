@@ -7,12 +7,12 @@ namespace Lemonade\Cms\Page\Template;
 use InvalidArgumentException;
 
 /**
- * Popisuje jednu hostem nabizenou sablonu stranky
+ * Describes one page template offered to editors
  */
 final readonly class PageTemplateDefinition
 {
     /**
-     * Nastavuje stabilni klic a prekladovy klic host sablony
+     * Creates a template with its stable code and translation key
      */
     public function __construct(
         private string $key,
@@ -24,17 +24,17 @@ final readonly class PageTemplateDefinition
     }
 
     /**
-     * Vrati stabilni klic ukladany u stranky
+     * Returns the stable code stored with a page
      */
-    public function key(): string
+    public function getKey(): string
     {
         return $this->key;
     }
 
     /**
-     * Vrati prekladovy klic nazvu pro editor
+     * Returns the template label translation key
      */
-    public function labelKey(): string
+    public function getLabelKey(): string
     {
         return $this->labelKey;
     }

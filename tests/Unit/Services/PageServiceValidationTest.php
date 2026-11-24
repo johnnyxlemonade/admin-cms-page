@@ -167,7 +167,7 @@ final class PageServiceValidationTest extends TestCase
             $service->save(AuditActor::user(1), 7, $payload);
             self::fail('Incomplete page published');
         } catch (\Lemonade\Cms\Content\CmsContentValidationException $exception) {
-            self::assertSame(['title', 'template_key'], array_keys($exception->errors()));
+            self::assertSame(['title', 'template_key'], array_keys($exception->getErrors()));
         }
     }
 

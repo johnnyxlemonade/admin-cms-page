@@ -25,12 +25,12 @@ use Lemonade\Admin\Presentation\AdminFileUploadCollection;
 use Lemonade\Framework\Routing\UrlGenerator;
 
 /**
- * Sklada full-page editor obsahu, SEO, nastaveni a publikace stranky
+ * Builds the full-page editor for content, SEO, settings and publication
  */
 final readonly class PageAdminEditorDefinitionFactory
 {
     /**
-     * Nastavuje named Admin routy pro formular a navigaci editoru
+     * Creates the editor definition builder with named Admin routes
      */
     public function __construct(
         private UrlGenerator $urls,
@@ -38,7 +38,7 @@ final readonly class PageAdminEditorDefinitionFactory
     ) {}
 
     /**
-     * Vytvori editor jedne lokalizace s globalnim nastavenim stromu
+     * Builds an editor for one translation and global tree settings
      *
      * @param array<string,mixed> $page
      * @param array<string,string> $parentOptions
@@ -87,7 +87,7 @@ final readonly class PageAdminEditorDefinitionFactory
     }
 
     /**
-     * Vytvori canonical save transport se zachovanym content locale
+     * Builds the save transport with the selected content locale
      */
     private function form(int $pageId, string $contentLocale): AdminActionFormDefinition
     {
@@ -103,8 +103,7 @@ final readonly class PageAdminEditorDefinitionFactory
     }
 
     /**
-     * Vytvori tab nadpisu a rich-text obsahu jedne mutation
-     *
+     * Builds the title and rich-text tab for one translation
      */
     private function contentTab(string $locale, int $state, bool $canPublish): AdminEditorTab
     {
@@ -146,6 +145,8 @@ final readonly class PageAdminEditorDefinitionFactory
     }
 
     /**
+     * Builds the hierarchy and template settings tab
+     *
      * @param array<string,string> $parentOptions
      * @param array<string,string> $templateOptions
      */
@@ -180,7 +181,7 @@ final readonly class PageAdminEditorDefinitionFactory
     }
 
     /**
-     * Vrati needitovatelnou rodicovskou cast canonical cesty
+     * Returns the noneditable parent prefix of a canonical path
      *
      * @param array<string,mixed> $translation
      */

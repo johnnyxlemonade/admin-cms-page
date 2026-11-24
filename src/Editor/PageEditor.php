@@ -26,7 +26,7 @@ use Lemonade\Framework\Routing\UrlGenerator;
 use Lemonade\Framework\Validation\ValidationSchema;
 
 /**
- * Propojuje CMS Page full-page editor s domenovymi mutacemi
+ * Connects the page editor to domain mutations
  */
 final readonly class PageEditor implements
     EditorProviderInterface,
@@ -34,7 +34,7 @@ final readonly class PageEditor implements
     EditorFieldAccessPolicyInterface
 {
     /**
-     * Nastavuje Pages persistence, mutation service, content locales a auditni identitu editoru
+     * Creates the editor with page persistence, locales and audit identity
      */
     public function __construct(
         private PageModel $pages,
@@ -49,7 +49,7 @@ final readonly class PageEditor implements
     ) {}
 
     /**
-     * Deklaruje transportni pole jedne lokalizovane mutation a globalnich nastaveni stranky
+     * Declares transport fields for one translation and global page settings
      */
     public function editorDefinition(): EditorDefinition
     {
@@ -73,7 +73,7 @@ final readonly class PageEditor implements
     }
 
     /**
-     * Overi globalni nebo vlastnicky pristup ke cteni stranky
+     * Authorizes page reads by global or owner permission
      */
     public function loadAccessDecision(int $id): bool
     {
@@ -85,7 +85,7 @@ final readonly class PageEditor implements
     }
 
     /**
-     * Overi globalni nebo vlastnicky pristup k beznemu ulozeni stranky
+     * Authorizes page saves by global or owner permission
      */
     public function saveAccessDecision(int $id): bool
     {
@@ -97,7 +97,7 @@ final readonly class PageEditor implements
     }
 
     /**
-     * Overi publish pole proti vlastnikovi root stranky
+     * Authorizes publication fields for the page owner
      */
     public function fieldAccessDecision(int $id, string $field): ?bool
     {
@@ -113,7 +113,7 @@ final readonly class PageEditor implements
     }
 
     /**
-     * Nacte existujici Page aggregate a dostupne content locales pro editaci
+     * Loads the page aggregate and available locales for editing
      */
     public function updateData(int $id): array
     {
@@ -126,7 +126,7 @@ final readonly class PageEditor implements
     }
 
     /**
-     * Vrati prazdny editorovy stav pro nepouzitou fallback create route
+     * Returns empty editor data for the unused create route
      */
     public function createData(): array
     {
@@ -137,7 +137,7 @@ final readonly class PageEditor implements
     }
 
     /**
-     * Vrati prazdnou validaci pro okamzite zalozeni draftu bez vstupu uzivatele
+     * Returns empty validation for immediate draft creation
      */
     public function createValidationSchema(): ValidationSchema
     {
@@ -145,7 +145,7 @@ final readonly class PageEditor implements
     }
 
     /**
-     * Vrati validaci globalnich nastaveni a jedne content mutation
+     * Returns validation for global settings and one translation
      */
     public function updateValidationSchema(int $id): ValidationSchema
     {
@@ -153,7 +153,7 @@ final readonly class PageEditor implements
     }
 
     /**
-     * Ulozi globalni nastaveni a prave jednu zvolenou jazykovou mutaci
+     * Saves global settings and the selected translation
      */
     public function update(int $id, array $data): EditorSaveResult
     {
@@ -168,7 +168,7 @@ final readonly class PageEditor implements
             throw new EditorValidationException(
                 $exception->getMessage(),
                 previous: $exception,
-                errors: array_map($this->translator->get(...), $exception->errors()),
+                errors: array_map($this->translator->get(...), $exception->getErrors()),
             );
         } catch (DomainException $exception) {
             throw new EditorValidationException($exception->getMessage(), previous: $exception);
@@ -187,7 +187,7 @@ final readonly class PageEditor implements
     }
 
     /**
-     * Zalozi minimalni draft v canonical vychozim content locale
+     * Creates a minimal draft in the default content locale
      */
     public function create(array $data): EditorSaveResult
     {
@@ -202,7 +202,7 @@ final readonly class PageEditor implements
             throw new EditorValidationException(
                 $exception->getMessage(),
                 previous: $exception,
-                errors: array_map($this->translator->get(...), $exception->errors()),
+                errors: array_map($this->translator->get(...), $exception->getErrors()),
             );
         } catch (DomainException $exception) {
             throw new EditorValidationException($exception->getMessage(), previous: $exception);
@@ -218,7 +218,7 @@ final readonly class PageEditor implements
     }
 
     /**
-     * Vytvori canonical edit URL se zachovanym content locale
+     * Builds an edit URL that preserves the content locale
      */
     private function editUrl(int $pageId, string $locale): string
     {

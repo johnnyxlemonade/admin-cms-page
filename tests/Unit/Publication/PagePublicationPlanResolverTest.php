@@ -36,10 +36,10 @@ final class PagePublicationPlanResolverTest extends TestCase
             '2026-10-19 12:00:00',
         );
 
-        self::assertSame($expectedState, $plan->state);
-        self::assertSame($expectedPublishedAt, $plan->publishedAt);
-        self::assertSame($changed, $plan->changed);
-        self::assertSame($requiresPublicationEvent, $plan->requiresPublicationEvent);
+        self::assertSame($expectedState, $plan->getState());
+        self::assertSame($expectedPublishedAt, $plan->getPublishedAt());
+        self::assertSame($changed, $plan->isChanged());
+        self::assertSame($requiresPublicationEvent, $plan->requiresPublicationEvent());
     }
 
     /**

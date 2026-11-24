@@ -9,7 +9,7 @@ use Lemonade\Framework\Database\Model;
 use Lemonade\Framework\Database\QueryBuilder;
 
 /**
- * Zprostredkuje persistenci stromu stranek a jejich lokalizaci
+ * Persists the page hierarchy and its localized content
  */
 final class PageModel extends Model
 {
@@ -33,7 +33,7 @@ final class PageModel extends Model
     ];
 
     /**
-     * Vytvori minimalni root draft a jeho vychozi lokalizaci
+     * Creates a root draft and its initial translation
      */
     public function createDraft(int $userId, string $locale, string $templateKey, string $now): int
     {
@@ -68,27 +68,20 @@ final class PageModel extends Model
     }
 
     /**
-     * Vrati root metadata aktivni stranky
+     * Returns metadata for an active page root
      *
      * @return array<string,mixed>|null
      */
     public function page(int $pageId): ?array
     {
-        return $this->query()
-            ->select([
-                'id', 'created_by', 'updated_by', 'deleted_by', 'owner_id',
-                'parent_id', 'sort_order', 'template_key', 'created_at', 'updated_at', 'deleted_at',
-            ])
-            ->selectRaw("COALESCE(NULLIF(TRIM(CONCAT_WS(' ', (SELECT first_name FROM system_user WHERE id = cms_page.created_by), (SELECT last_name FROM system_user WHERE id = cms_page.created_by))), ''), (SELECT email FROM system_user WHERE id = cms_page.created_by), '—') AS created_by_name")
-            ->selectRaw("COALESCE(NULLIF(TRIM(CONCAT_WS(' ', (SELECT first_name FROM system_user WHERE id = cms_page.updated_by), (SELECT last_name FROM system_user WHERE id = cms_page.updated_by))), ''), (SELECT email FROM system_user WHERE id = cms_page.updated_by), '—') AS updated_by_name")
-            ->selectRaw("COALESCE(NULLIF(TRIM(CONCAT_WS(' ', (SELECT first_name FROM system_user WHERE id = cms_page.deleted_by), (SELECT last_name FROM system_user WHERE id = cms_page.deleted_by))), ''), (SELECT email FROM system_user WHERE id = cms_page.deleted_by), '—') AS deleted_by_name")
-            ->selectRaw("COALESCE(NULLIF(TRIM(CONCAT_WS(' ', (SELECT first_name FROM system_user WHERE id = cms_page.owner_id), (SELECT last_name FROM system_user WHERE id = cms_page.owner_id))), ''), (SELECT email FROM system_user WHERE id = cms_page.owner_id), '—') AS owner_name")
+        return $this->pageRowsQuery()
             ->where('id', $pageId)
+            ->where('deleted_at', null)
             ->first();
     }
 
     /**
-     * Vrati root vcetne soft-delete stavu
+     * Returns a page root including its soft-delete state
      *
      * @return array<string,mixed>|null
      */
@@ -102,7 +95,7 @@ final class PageModel extends Model
     }
 
     /**
-     * Zamkne root vcetne soft-delete stavu pro lifecycle mutaci
+     * Locks a page root for a lifecycle mutation
      *
      * @return array<string,mixed>|null
      */
@@ -117,7 +110,7 @@ final class PageModel extends Model
     }
 
     /**
-     * Vrati aktualniho vlastnika vcetne soft-delete stavu
+     * Returns the current owner including soft-deleted pages
      */
     public function ownerId(int $pageId): ?int
     {
@@ -133,7 +126,7 @@ final class PageModel extends Model
     }
 
     /**
-     * Zamkne vlastnictvi stranky pro atomicke predani
+     * Locks page ownership for an atomic transfer
      *
      * @return array{owner_id:int|null}|null
      */
@@ -152,7 +145,7 @@ final class PageModel extends Model
     }
 
     /**
-     * Ulozi globalni umisteni, poradi a host sablonu stranky
+     * Saves a page's position, sibling order and template code
      */
     public function saveSettings(int $pageId, ?int $parentId, int $sortOrder, string $templateKey, string $now): void
     {
@@ -168,7 +161,7 @@ final class PageModel extends Model
     }
 
     /**
-     * Normalizuje poradi zadane skupiny sourozencu
+     * Normalizes the order of a sibling group
      *
      * @param list<int> $pageIds
      */
@@ -183,7 +176,7 @@ final class PageModel extends Model
     }
 
     /**
-     * Vrati jednu lokalizovanou mutaci
+     * Returns one page translation
      *
      * @return array<string,mixed>|null
      */
@@ -200,7 +193,7 @@ final class PageModel extends Model
     }
 
     /**
-     * Zamkne existujici lokalizovanou mutaci pro zapis v aggregate transakci
+     * Locks a translation within the aggregate transaction
      *
      * @return array<string,mixed>|null
      */
@@ -218,7 +211,7 @@ final class PageModel extends Model
     }
 
     /**
-     * Vlozi nebo upravi jednu lokalizovanou mutaci
+     * Inserts or updates one page translation
      */
     public function saveTranslation(
         int $pageId,
@@ -265,7 +258,7 @@ final class PageModel extends Model
     }
 
     /**
-     * Ulozi publication lifecycle lokalizace
+     * Saves a translation's publication state
      */
     public function savePublication(int $pageId, string $locale, CmsPublicationState $state, ?string $publishedAt, string $now): void
     {
@@ -281,7 +274,7 @@ final class PageModel extends Model
     }
 
     /**
-     * Soft-deleteuje jednu stranku
+     * Soft-deletes one page
      */
     public function softDelete(int $pageId, int $userId, string $now): void
     {
@@ -294,7 +287,7 @@ final class PageModel extends Model
     }
 
     /**
-     * Obnovi stranku a vsechny lokalizace jako draft
+     * Restores a page and all translations as drafts
      */
     public function restoreDraft(int $pageId, int $userId, string $now): void
     {
@@ -318,7 +311,7 @@ final class PageModel extends Model
     }
 
     /**
-     * Aktualizuje posledniho uzivatele pouze po skutecne zmene aggregate
+     * Updates the last editor after an aggregate change
      */
     public function touchUpdatedBy(int $pageId, int $userId, string $now): void
     {
@@ -329,7 +322,7 @@ final class PageModel extends Model
     }
 
     /**
-     * Preda vlastnictvi stranky bez zmeny puvodniho tvurce
+     * Transfers ownership without changing the original creator
      */
     public function transferOwner(int $pageId, int $ownerId, int $userId, string $now): void
     {
@@ -344,7 +337,7 @@ final class PageModel extends Model
     }
 
     /**
-     * Vrati vsechny aktivni rooty pro stromove invarianty
+     * Returns active roots for hierarchy validation
      *
      * @return list<array{id:int,parent_id:int|null,sort_order:int,template_key:string,updated_at:string,deleted_at:mixed}>
      */
@@ -363,7 +356,7 @@ final class PageModel extends Model
     }
 
     /**
-     * Zamkne aktivni strom pro atomickou zmenu hierarchie nebo lifecycle
+     * Locks the active tree for an atomic hierarchy or lifecycle change
      *
      * @return list<array{id:int,parent_id:int|null,sort_order:int,template_key:string,updated_at:string,deleted_at:mixed}>
      */
@@ -383,13 +376,13 @@ final class PageModel extends Model
     }
 
     /**
-     * Vrati vsechny rooty vcetne smazanych pro DataGrid
+     * Returns page roots including deleted pages for the DataGrid
      *
      * @return list<array<string,mixed>>
      */
     public function treeWithDeleted(?int $ownerId = null): array
     {
-        $query = $this->treeWithDeletedQuery();
+        $query = $this->pageRowsQuery();
         if ($ownerId === null) {
             return $query->getArray();
         }
@@ -413,7 +406,7 @@ final class PageModel extends Model
                 break;
             }
             $pendingParentIds = [];
-            foreach ($this->treeWithDeletedQuery()->whereIn('id', $parentIds)->getArray() as $row) {
+            foreach ($this->pageRowsQuery()->whereIn('id', $parentIds)->getArray() as $row) {
                 $pageId = (int) $row['id'];
                 $rowsById[$pageId] = $row;
                 if ($row['parent_id'] !== null && !isset($rowsById[(int) $row['parent_id']])) {
@@ -426,9 +419,9 @@ final class PageModel extends Model
     }
 
     /**
-     * Sestavi jednotny dotaz na root metadata a auditni identity Pages
+     * Builds the page root query with audit identities including deleted pages
      */
-    private function treeWithDeletedQuery(): QueryBuilder
+    private function pageRowsQuery(): QueryBuilder
     {
         return $this->withDeleted()->query()
             ->select([
@@ -442,7 +435,7 @@ final class PageModel extends Model
     }
 
     /**
-     * Vrati preklady a canonical cesty pro DataGrid ve zvolenem locale
+     * Returns translations and canonical paths for a DataGrid locale
      *
      * @param list<int>|null $pageIds
      * @return array<int,array<string,mixed>>
@@ -478,7 +471,7 @@ final class PageModel extends Model
     }
 
     /**
-     * Vrati vsechny canonical routy podstromu
+     * Returns all canonical routes in a page subtree
      *
      * @param list<int> $pageIds
      * @return list<array{entity_id:int,locale:string,path:string}>
@@ -502,7 +495,7 @@ final class PageModel extends Model
     }
 
     /**
-     * Vrati canonical cestu jednoho rodice v locale
+     * Returns the canonical path of one parent in a locale
      */
     public function routePath(int $pageId, string $locale): ?string
     {
@@ -518,7 +511,7 @@ final class PageModel extends Model
     }
 
     /**
-     * Nacte aggregate se vsemi mutacemi pro full-page editor
+     * Loads a page aggregate with all translations for the editor
      *
      * @return array<string,mixed>|null
      */
@@ -551,7 +544,7 @@ final class PageModel extends Model
     }
 
     /**
-     * Vrati locale dostupne pro editor vcetne ulozenych neaktivnich mutaci
+     * Returns editor locales including stored inactive translations
      *
      * @return list<array{code:string,name:string,enabled:int,is_default:int,has_translation:int}>
      */
@@ -579,7 +572,7 @@ final class PageModel extends Model
     }
 
     /**
-     * Vrati aktivni locale a deaktivovane locale s existujici Page mutaci
+     * Returns enabled locales and inactive locales with page translations
      *
      * @return list<array{code:string,name:string}>
      */
@@ -608,7 +601,7 @@ final class PageModel extends Model
     }
 
     /**
-     * Vrati publikovane mutace pro kontrolu sdileneho rodice a sablony
+     * Returns published translations for shared parent and template checks
      *
      * @return list<array<string,mixed>>
      */
@@ -622,7 +615,7 @@ final class PageModel extends Model
     }
 
     /**
-     * Rozhodne, zda ma stranka publikovane potomky v locale
+     * Reports whether a page has published descendants in a locale
      *
      * @param list<int> $descendantIds
      */
@@ -640,7 +633,7 @@ final class PageModel extends Model
     }
 
     /**
-     * Vrati query builder lokalizovanych mutaci
+     * Returns the query builder for page translations
      */
     private function translations(): QueryBuilder
     {

@@ -8,6 +8,10 @@ return [
         'description' => 'Správa hierarchických stránek webu.',
     ],
 
+    'templates' => [
+        'default' => 'Obecná stránka',
+    ],
+
     'actions' => [
         'create' => 'Přidat stránku',
         'move_up' => 'Posunout nahoru',

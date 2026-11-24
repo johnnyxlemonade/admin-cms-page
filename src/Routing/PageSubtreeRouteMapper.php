@@ -7,11 +7,13 @@ namespace Lemonade\Cms\Page\Routing;
 use DomainException;
 
 /**
- * Prepocita existujici lokalizovane routy celeho podstromu pod novy prefix
+ * Maps existing localized subtree routes to a new prefix
  */
 final readonly class PageSubtreeRouteMapper
 {
     /**
+     * Replaces each route prefix while preserving the descendant suffix
+     *
      * @param non-empty-list<array{entity_id:int,locale:string,path:string}> $routes
      * @param array<string,array{old:string,new:string}> $prefixes
      * @return non-empty-list<array{entityId:int,locale:string,path:string}>

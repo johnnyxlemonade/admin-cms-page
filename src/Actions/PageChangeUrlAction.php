@@ -18,12 +18,12 @@ use Lemonade\Cms\Page\Services\PageService;
 use Lemonade\Framework\Http\HttpStatus;
 
 /**
- * Prevadi explicitni zmenu URL stranky na canonical Admin action
+ * Handles explicit URL changes through the shared Admin action transport
  */
 final readonly class PageChangeUrlAction implements ModuleActionHandlerInterface, ModuleActionAccessPolicyInterface
 {
     /**
-     * Nastavuje stromove routy a lokalni auditni identitu
+     * Creates the action with page routes and local actor identity
      */
     public function __construct(
         private PageService $pages,
@@ -33,7 +33,7 @@ final readonly class PageChangeUrlAction implements ModuleActionHandlerInterface
     ) {}
 
     /**
-     * Overi editaci URL globalnim nebo vlastnickym opravnenim
+     * Authorizes URL changes using global or owner permission
      */
     public function accessDecision(?int $id): bool
     {
@@ -45,7 +45,7 @@ final readonly class PageChangeUrlAction implements ModuleActionHandlerInterface
     }
 
     /**
-     * Ulozi pouze vlastni URL segment a atomicky prepocita podstrom
+     * Changes one URL segment and atomically updates the subtree
      *
      * @param array<string,mixed> $payload
      */

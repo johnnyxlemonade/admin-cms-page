@@ -20,8 +20,8 @@ final class PageTemplateDefinitionTest extends TestCase
     {
         $template = new PageTemplateDefinition('news-list', 'page_template.news_list');
 
-        self::assertSame('news-list', $template->key());
-        self::assertSame('page_template.news_list', $template->labelKey());
+        self::assertSame('news-list', $template->getKey());
+        self::assertSame('page_template.news_list', $template->getLabelKey());
     }
 
     /**

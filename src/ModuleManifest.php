@@ -18,7 +18,7 @@ use Lemonade\Admin\Presentation\AdminFilePresentation;
 use Lemonade\Framework\Database\Migration\MigrationInterface;
 
 /**
- * Deklaruje optional CMS Page modul a jeho schema
+ * Declares the optional CMS Page module and its schema
  */
 final readonly class ModuleManifest implements
     ModuleManifestInterface,
@@ -29,7 +29,7 @@ final readonly class ModuleManifest implements
     public const string CODE = 'cms.page';
 
     /**
-     * Vrati stabilni kod Pages modulu
+     * Returns the stable page module code
      */
     public function code(): string
     {
@@ -37,7 +37,7 @@ final readonly class ModuleManifest implements
     }
 
     /**
-     * Vrati prekladovy klic nazvu modulu
+     * Returns the module label translation key
      */
     public function labelKey(): string
     {
@@ -45,7 +45,7 @@ final readonly class ModuleManifest implements
     }
 
     /**
-     * Vrati provider runtime contributions modulu
+     * Returns the module runtime provider class
      */
     public function runtimeProvider(): string
     {
@@ -53,7 +53,7 @@ final readonly class ModuleManifest implements
     }
 
     /**
-     * Vrati migrace aplikovane standardnim migration lifecycle
+     * Returns migrations for the standard deployment lifecycle
      *
      * @return list<class-string<MigrationInterface>>
      */
@@ -63,7 +63,7 @@ final readonly class ModuleManifest implements
     }
 
     /**
-     * Vrati metadata generic Admin module transportu
+     * Returns metadata for generic Admin module transport
      */
     public function adminMetadata(): AdminModuleMetadata
     {
@@ -79,7 +79,7 @@ final readonly class ModuleManifest implements
     }
 
     /**
-     * Vraci file capability Pages modulu
+     * Returns the page module file capabilities
      */
     public function fileCapabilities(): AdminFileCapabilities
     {
@@ -93,7 +93,7 @@ final readonly class ModuleManifest implements
     }
 
     /**
-     * Vrati prava vyzadovana pro skutecne Pages operace
+     * Returns permissions required by page operations
      *
      * @return list<PermissionDefinition>
      */
@@ -116,7 +116,7 @@ final readonly class ModuleManifest implements
     }
 
     /**
-     * Deklaruje presentation udalosti skutecnych mutaci stranek
+     * Declares audit events for page mutations
      *
      * @return list<AuditEventDefinition>
      */

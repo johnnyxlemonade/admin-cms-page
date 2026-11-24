@@ -10,7 +10,7 @@ use Lemonade\Admin\Action\Presentation\ConfirmationDefinition;
 use Lemonade\Cms\Page\ModuleManifest;
 
 /**
- * Registruje shared editor a lifecycle akce CMS stranek
+ * Registers page editor and lifecycle actions
  */
 final readonly class PageActionRegistrar
 {
@@ -20,14 +20,14 @@ final readonly class PageActionRegistrar
     public const string MOVE_DOWN_HANDLER = 'admin.cms.page.action.move_down';
 
     /**
-     * Nastavuje registry definic a handler service ID
+     * Creates the action registrar with the shared registry
      */
     public function __construct(
         private ModuleActionRegistry $actions,
     ) {}
 
     /**
-     * Registruje autorizovane create, save, poradi a lifecycle akce Pages
+     * Registers authorized create, save, reorder and lifecycle actions
      */
     public function register(): void
     {

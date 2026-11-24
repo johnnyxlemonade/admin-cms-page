@@ -18,12 +18,12 @@ use Lemonade\Cms\Page\Services\PageService;
 use Lemonade\Framework\Http\HttpStatus;
 
 /**
- * Prevadi soft delete stranky na canonical Admin action response
+ * Handles page soft deletion through the shared Admin action transport
  */
 final readonly class PageDeleteAction implements ModuleActionHandlerInterface, ModuleActionAccessPolicyInterface
 {
     /**
-     * Nastavuje lifecycle service a canonical actor guard
+     * Creates the action with page lifecycle and actor dependencies
      */
     public function __construct(
         private PageService $pages,
@@ -33,7 +33,7 @@ final readonly class PageDeleteAction implements ModuleActionHandlerInterface, M
     ) {}
 
     /**
-     * Overi soft delete globalnim nebo vlastnickym opravnenim
+     * Authorizes deletion using global or owner permission
      */
     public function accessDecision(?int $id): bool
     {
@@ -45,7 +45,7 @@ final readonly class PageDeleteAction implements ModuleActionHandlerInterface, M
     }
 
     /**
-     * Soft-deleteuje existujici stranku
+     * Soft-deletes an existing page
      *
      * @param array<string,mixed> $payload
      */

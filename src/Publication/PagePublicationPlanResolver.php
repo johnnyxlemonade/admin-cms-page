@@ -10,12 +10,12 @@ use Lemonade\Cms\CmsPublicationState;
 use Lemonade\Cms\Content\CmsContentValidationException;
 
 /**
- * Zachovava publication metadata a rozpoznava zmenu vyzadujici publish opravneni
+ * Resolves page publication metadata and detects publish events
  */
 final readonly class PagePublicationPlanResolver
 {
     /**
-     * Vyhodnoti pozadovany stav proti existujici lokalizovane mutation
+     * Resolves the requested state against an existing translation
      *
      * @param array<string,mixed>|null $existing
      */

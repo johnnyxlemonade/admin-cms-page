@@ -15,12 +15,12 @@ use Lemonade\Cms\Page\Services\PageService;
 use Lemonade\Framework\Http\HttpStatus;
 
 /**
- * Prevadi posun stranky mezi sourozenci na canonical Admin action response
+ * Handles sibling reordering through the shared Admin action transport
  */
 final readonly class PageReorderAction implements ModuleActionHandlerInterface
 {
     /**
-     * Nastavuje smer posunu a sdilenou actor hranici
+     * Creates the reorder action with its direction and actor guard
      */
     public function __construct(
         private PageService $pages,
@@ -29,7 +29,7 @@ final readonly class PageReorderAction implements ModuleActionHandlerInterface
     ) {}
 
     /**
-     * Posune existujici stranku o jednu pozici
+     * Moves a page by one sibling position
      *
      * @param array<string,mixed> $payload
      */
