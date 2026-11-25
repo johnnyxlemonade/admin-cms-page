@@ -16,7 +16,7 @@ final readonly class PageTemplateProvider implements PageTemplateProviderInterfa
     public const string DEFAULT_KEY = 'default';
 
     /**
-     * Creates the page template provider with access to tagged definitions
+     * Creates the page template provider with access to tagged host contributions
      */
     public function __construct(private ContainerInterface $container) {}
 
@@ -34,7 +34,50 @@ final readonly class PageTemplateProvider implements PageTemplateProviderInterfa
         $templates = [new PageTemplateDefinition(self::DEFAULT_KEY, 'page.templates.default')];
         $codes = [self::DEFAULT_KEY => true];
 
-        foreach ($this->container->tagged(PageTemplateDefinition::class) as $serviceId => $template) {
+        foreach ($this->hostTemplates($this->container) as $template) {
+            if (isset($codes[$template->getKey()])) {
+                throw new LogicException(sprintf('Page template code "%s" is registered more than once.', $template->getKey()));
+            }
+
+            $templates[] = $template;
+            $codes[$template->getKey()] = true;
+        }
+
+        return $templates;
+    }
+
+    /**
+     * Returns templates contributed by host catalogs and individual definitions
+     *
+     * @return list<PageTemplateDefinition>
+     */
+    private function hostTemplates(TaggedServicesInterface $container): array
+    {
+        $templates = [];
+
+        foreach ($container->tagged(PageTemplateCatalogInterface::class) as $serviceId => $catalog) {
+            if (!$catalog instanceof PageTemplateCatalogInterface) {
+                throw new LogicException(sprintf(
+                    'Tagged page template catalog "%s" must be a %s.',
+                    $serviceId,
+                    PageTemplateCatalogInterface::class,
+                ));
+            }
+
+            foreach ($catalog->templates() as $template) {
+                if (!$template instanceof PageTemplateDefinition) {
+                    throw new LogicException(sprintf(
+                        'Page template catalog "%s" must return only %s instances.',
+                        $serviceId,
+                        PageTemplateDefinition::class,
+                    ));
+                }
+
+                $templates[] = $template;
+            }
+        }
+
+        foreach ($container->tagged(PageTemplateDefinition::class) as $serviceId => $template) {
             if (!$template instanceof PageTemplateDefinition) {
                 throw new LogicException(sprintf(
                     'Tagged page template "%s" must be a %s.',
@@ -43,12 +86,7 @@ final readonly class PageTemplateProvider implements PageTemplateProviderInterfa
                 ));
             }
 
-            if (isset($codes[$template->getKey()])) {
-                throw new LogicException(sprintf('Page template code "%s" is registered more than once.', $template->getKey()));
-            }
-
             $templates[] = $template;
-            $codes[$template->getKey()] = true;
         }
 
         return $templates;

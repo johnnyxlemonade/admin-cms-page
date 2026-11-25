@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Lemonade\Cms\Page\Tests\Unit\Template;
 
 use Lemonade\Cms\Page\CmsPageServiceProvider;
+use Lemonade\Cms\Page\Template\PageTemplateCatalogInterface;
 use Lemonade\Cms\Page\Template\PageTemplateDefinition;
 use Lemonade\Cms\Page\Template\PageTemplateProviderInterface;
 use Lemonade\Framework\Container\Container;
@@ -53,6 +54,46 @@ final class PageTemplateProviderTest extends TestCase
     }
 
     /**
+     * Adds all templates from one host catalog after the general template
+     */
+    public function testIncludesHostTemplateCatalog(): void
+    {
+        $container = new Container();
+        (new CmsPageServiceProvider())->register($container);
+        $container->singletonTagged(
+            HostPageTemplateCatalog::class,
+            HostPageTemplateCatalog::class,
+            PageTemplateCatalogInterface::class,
+        );
+
+        $templates = $container->get(PageTemplateProviderInterface::class)->templates();
+
+        self::assertSame(['default', 'landing', 'contact'], array_map(
+            static fn(PageTemplateDefinition $template): string => $template->getKey(),
+            $templates,
+        ));
+    }
+
+    /**
+     * Prevents a host catalog from replacing the package-owned general template
+     */
+    public function testRejectsGeneralTemplateFromHostCatalog(): void
+    {
+        $container = new Container();
+        (new CmsPageServiceProvider())->register($container);
+        $container->singletonTagged(
+            DuplicateGeneralPageTemplateCatalog::class,
+            DuplicateGeneralPageTemplateCatalog::class,
+            PageTemplateCatalogInterface::class,
+        );
+
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessage('Page template code "default" is registered more than once.');
+
+        $container->get(PageTemplateProviderInterface::class)->templates();
+    }
+
+    /**
      * Rejects a host contribution that repeats the general template code
      */
     public function testRejectsDuplicateGeneralTemplate(): void
@@ -93,5 +134,36 @@ final class PageTemplateProviderTest extends TestCase
         $this->expectExceptionMessage('Page template code "landing" is registered more than once.');
 
         $container->get(PageTemplateProviderInterface::class)->templates();
+    }
+}
+
+/**
+ * Provides page templates supported by the test host
+ */
+final readonly class HostPageTemplateCatalog implements PageTemplateCatalogInterface
+{
+    /**
+     * Returns the test host page templates
+     */
+    public function templates(): array
+    {
+        return [
+            new PageTemplateDefinition('landing', 'page_template.landing'),
+            new PageTemplateDefinition('contact', 'page_template.contact'),
+        ];
+    }
+}
+
+/**
+ * Attempts to replace the package-owned general template
+ */
+final readonly class DuplicateGeneralPageTemplateCatalog implements PageTemplateCatalogInterface
+{
+    /**
+     * Returns an invalid host override of the general template
+     */
+    public function templates(): array
+    {
+        return [new PageTemplateDefinition('default', 'page_template.default')];
     }
 }
